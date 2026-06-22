@@ -1,5 +1,38 @@
 import { configFor } from "/sites.js";
 
+// Hoverboard is 111.78 BPM (aubio tempo). Everything is scripted off that —
+// no live audio analysis. Audio plays alongside; the visuals stay in sync
+// because the timing is hardcoded.
+const BPM         = 111.78;
+const BEAT_S      = 60 / BPM;            // ~0.537 s
+const COLOR_S     = BEAT_S / 2;          // 8th-note color advance — also the ripple emit rate
+
+// Drop landmark. Aubio's beat-tracker shows the kick locking to the main
+// 111.78 BPM grid at t≈5.735s, but the *perceived* drop (full instrumentation
+// in) sits one bar later. Snapping to step 26 of the 8th-note grid →
+// INTRO_END_S = 26 * COLOR_S ≈ 6.98 s, lining up with Markus's "6/7 s in".
+const DROP_STEP   = 25;
+const INTRO_END_S = DROP_STEP * COLOR_S; // ≈ 6.713 s
+
+// During the build, the dog bobs and the trail drifts at 2× pace; on the
+// drop step both relax to the steady-state values.
+const BOB_HZ_NORM  = (BPM / 60) / 4;     // ~0.47 Hz — slow swim, post-drop
+const BOB_HZ_INTRO = BOB_HZ_NORM * 2;    // ~0.93 Hz — twice as fast pre-drop
+const DRIFT_NORM   = 460;                // px/sec rightward, post-drop
+const DRIFT_INTRO  = DRIFT_NORM * 2;     // px/sec rightward, pre-drop
+
+const RIPPLE_LIFE  = 2.4;                // seconds before the silhouette-ripple is dropped
+const RIPPLE_END   = 2.8;                // steady-state scale multiplier at end of life
+
+// Spiraling segment — the named [42 s, 50 s] window in the song where the
+// trail visibly intensifies. Inside this segment the silhouette emit rate
+// doubles to 16th-notes AND each emitted ripple grows to ~2× the steady-state
+// end scale (i.e. larger heads, faster). Everything else (bob, drift, tilt)
+// stays at the steady-state values.
+const SPIRAL_START   = 42.0;
+const SPIRAL_END     = 50.0;
+const SPIRAL_END_SCALE = 1 + 2 * (RIPPLE_END - 1);  // grows 2× the size delta — ≈ 4.6
+
 const PALETTE = [
   "#ff006e", // hot magenta
   "#00e5ff", // cyan
@@ -9,194 +42,257 @@ const PALETTE = [
   "#ff1744", // red
 ];
 
-const TRAIL_LEN = 7;
-const REFRACTORY_MS = 160;
-const BEAT_THRESHOLD = 1.45;
-
-const canvas = document.getElementById("stage");
-const ctx = canvas.getContext("2d");
+const canvas   = document.getElementById("stage");
+const ctx      = canvas.getContext("2d");
 const enterBtn = document.getElementById("enter");
-const card = document.getElementById("card");
+const overlay  = document.getElementById("overlay");
+const elHead   = document.getElementById("headline");
+const elDom    = document.getElementById("domain");
+const elOwner  = document.getElementById("owner");
 
 const cfg = configFor(location.hostname);
 if (cfg.title) document.title = cfg.title;
-if (cfg.blurb) {
-  card.innerHTML = `<span class="host">${location.hostname}</span><span class="blurb">${cfg.blurb}</span>`;
-  card.hidden = false;
-}
+if (cfg.headline) { elHead.textContent = cfg.headline; elHead.dataset.text = cfg.headline; }
+if (cfg.domain)   elDom.textContent   = cfg.domain;
+if (cfg.owner)    elOwner.textContent = cfg.owner;
 
 let dpr = 1;
 function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.floor(innerWidth * dpr);
+  canvas.width  = Math.floor(innerWidth * dpr);
   canvas.height = Math.floor(innerHeight * dpr);
-  canvas.style.width = innerWidth + "px";
+  canvas.style.width  = innerWidth  + "px";
   canvas.style.height = innerHeight + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (mascotImg) layout();
 }
-resize();
 addEventListener("resize", resize);
 
 function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
+  return new Promise((res, rej) => {
+    const i = new Image();
+    i.onload  = () => res(i);
+    i.onerror = rej;
+    i.src = src;
   });
 }
 
 function bakeSilhouette(mask, color) {
-  const off = document.createElement("canvas");
-  off.width = mask.width;
-  off.height = mask.height;
-  const octx = off.getContext("2d");
-  octx.drawImage(mask, 0, 0);
-  octx.globalCompositeOperation = "source-in";
-  octx.fillStyle = color;
-  octx.fillRect(0, 0, off.width, off.height);
-  return off;
+  const c = document.createElement("canvas");
+  c.width  = mask.width;
+  c.height = mask.height;
+  const k = c.getContext("2d");
+  k.drawImage(mask, 0, 0);
+  k.globalCompositeOperation = "source-in";
+  k.fillStyle = color;
+  k.fillRect(0, 0, c.width, c.height);
+  return c;
 }
 
-const mascot = { x: 0, y: 0, vx: 0, vy: 0, w: 0, h: 0 };
-const trail = []; // {x, y, colorIdx, age}
-let colorIdx = 0;
-let beatPulse = 0;     // 0..1, decays per frame
-let beatTintIdx = 0;
-
-let silhouettes = [];
 let mascotImg = null;
+let silhouettes = [];
+const ripples = [];   // {x, y, w, h, tilt, colorIdx, t0}  — silhouette-shaped, scales outward
 
-async function loadAssets() {
-  mascotImg = await loadImage("/assets/hei/hei_mask_original.png");
-  silhouettes = PALETTE.map((c) => bakeSilhouette(mascotImg, c));
+const mascot = {
+  centerX: 0, centerY: 0,
+  bobAmp: 0,
+  w: 0, h: 0,
+};
 
-  const targetH = Math.min(innerHeight, innerWidth) * 0.28;
-  const scale = targetH / mascotImg.height;
-  mascot.w = mascotImg.width * scale;
+function layout() {
+  // Inflated, central-ish. Scaled larger and lifted up so GET BARKED + the
+  // domain block can sit underneath without the dog overlapping them.
+  const minDim  = Math.min(innerHeight, innerWidth);
+  const targetH = minDim * 0.46;
+  const scale   = targetH / mascotImg.height;
+  mascot.w = mascotImg.width  * scale;
   mascot.h = mascotImg.height * scale;
-  mascot.x = (innerWidth - mascot.w) / 2;
-  mascot.y = (innerHeight - mascot.h) / 2;
-  const speed = 0.18;
-  const a = Math.random() * Math.PI * 2;
-  mascot.vx = Math.cos(a) * speed * innerWidth * 0.001;
-  mascot.vy = Math.sin(a) * speed * innerHeight * 0.001;
+  mascot.centerX = innerWidth * 0.5;
+  mascot.centerY = innerHeight * 0.30;     // higher up — text block lives below
+  mascot.bobAmp  = minDim * 0.073;          // 66% of previous 0.11
 }
 
-let audioCtx, analyser, freqData, source, gain;
-let ema = 0;            // running average of low-band energy
-const EMA_ALPHA = 0.04; // slow-moving baseline
-let lastBeatAt = 0;
+async function preload() {
+  mascotImg   = await loadImage("/assets/hei/hei_mask_original.png");
+  silhouettes = PALETTE.map((c) => bakeSilhouette(mascotImg, c));
+  resize();
+}
 
-async function startAudio() {
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const res = await fetch("/assets/audio/hoverboard.mp3");
+let audioCtx;
+async function decodeUrl(url) {
+  const res = await fetch(url);
   const buf = await res.arrayBuffer();
-  const decoded = await audioCtx.decodeAudioData(buf);
+  return audioCtx.decodeAudioData(buf);
+}
+async function startAudio() {
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0.85;
+    gain.connect(audioCtx.destination);
 
-  source = audioCtx.createBufferSource();
-  source.buffer = decoded;
-  source.loop = true;
+    // First listen: hoverboard.mp3 — full song including the ending tone.
+    // On its scheduled end-time, hoverloop.mp3 starts looping forever; the
+    // hand-off is sample-accurate because we schedule both via the AudioContext
+    // clock rather than waiting on the `ended` event.
+    const [hoverboardBuf, hoverloopBuf] = await Promise.all([
+      decodeUrl("/assets/audio/hoverboard.mp3"),
+      decodeUrl("/assets/audio/hoverloop.mp3"),
+    ]);
 
-  analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 1024;
-  analyser.smoothingTimeConstant = 0.45;
-  freqData = new Uint8Array(analyser.frequencyBinCount);
+    const firstSrc = audioCtx.createBufferSource();
+    firstSrc.buffer = hoverboardBuf;
+    firstSrc.connect(gain);
 
-  gain = audioCtx.createGain();
-  gain.gain.value = 0;
+    const loopSrc = audioCtx.createBufferSource();
+    loopSrc.buffer = hoverloopBuf;
+    loopSrc.loop = true;
+    loopSrc.connect(gain);
 
-  source.connect(analyser);
-  analyser.connect(gain);
-  gain.connect(audioCtx.destination);
-
-  source.start();
-  gain.gain.linearRampToValueAtTime(0.85, audioCtx.currentTime + 0.6);
+    const startAt = audioCtx.currentTime + 0.02;
+    firstSrc.start(startAt);
+    loopSrc.start(startAt + hoverboardBuf.duration);
+  } catch (_) {
+    // Audio is non-essential to the visual. Swallow failures (e.g. headless).
+  }
 }
 
-function sampleEnergy() {
-  analyser.getByteFrequencyData(freqData);
-  // Low-band: first 10 bins (~0–430 Hz at 44.1kHz, fft=1024)
-  let sum = 0;
-  for (let i = 0; i < 10; i++) sum += freqData[i];
-  return sum / 10;
+let startMs = 0;
+let lastBeat = -1;
+let lastColor = -1;
+let colorIdx = 0;
+let dropped = false;          // toggles true on the first tick past INTRO_END_S
+
+function drawSilhouette(img, x, y, w, h, tilt) {
+  ctx.save();
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.rotate(tilt);
+  // Always left-facing (no flip); PNG is natively left-facing.
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.restore();
 }
 
-function onBeat() {
-  beatPulse = 1;
-  beatTintIdx = (beatTintIdx + 1) % PALETTE.length;
-  trail.unshift({ x: mascot.x, y: mascot.y, colorIdx, age: 0 });
-  if (trail.length > TRAIL_LEN) trail.pop();
-  colorIdx = (colorIdx + 1) % PALETTE.length;
-  // small velocity kick
-  const a = Math.random() * Math.PI * 2;
-  const kick = 0.4;
-  mascot.vx += Math.cos(a) * kick;
-  mascot.vy += Math.sin(a) * kick;
+// Piecewise-integrated bob phase so the up/down speed can step down at the
+// drop without the dog "teleporting" mid-cycle. φ(t) = 2π · ∫₀ᵗ f(τ) dτ.
+function bobPhase(t) {
+  if (t <= INTRO_END_S) return 2 * Math.PI * BOB_HZ_INTRO * t;
+  return 2 * Math.PI * (BOB_HZ_INTRO * INTRO_END_S + BOB_HZ_NORM * (t - INTRO_END_S));
 }
 
-function tick(now) {
-  // beat detection
-  if (analyser) {
-    const e = sampleEnergy();
-    ema = ema === 0 ? e : ema * (1 - EMA_ALPHA) + e * EMA_ALPHA;
-    if (e > ema * BEAT_THRESHOLD && now - lastBeatAt > REFRACTORY_MS && e > 30) {
-      lastBeatAt = now;
-      onBeat();
-    }
+// Piecewise-integrated emission count. Outside the spiraling segment the rate
+// is 1/COLOR_S (8th-note); inside the segment it's 2/COLOR_S (16th-note). The
+// integral gives a monotonic step counter, so crossing the boundary never
+// emits twice or skips a beat.
+function emitStep(t) {
+  if (t <= SPIRAL_START) return Math.floor(t / COLOR_S);
+  const baseSteps = SPIRAL_START / COLOR_S;
+  if (t <= SPIRAL_END) {
+    return Math.floor(baseSteps + (t - SPIRAL_START) * 2 / COLOR_S);
+  }
+  const spiralSteps = (SPIRAL_END - SPIRAL_START) * 2 / COLOR_S;
+  return Math.floor(baseSteps + spiralSteps + (t - SPIRAL_END) / COLOR_S);
+}
+
+function inSpiral(t) { return t >= SPIRAL_START && t < SPIRAL_END; }
+
+function tick(nowMs) {
+  if (startMs === 0) startMs = nowMs;
+  const t = (nowMs - startMs) / 1000;
+
+  // bob + tilt — dog stays at center X, only oscillates vertically.
+  const phase = bobPhase(t);
+  const dogX  = mascot.centerX - mascot.w / 2;
+  const dogY  = mascot.centerY - mascot.h / 2 + Math.sin(phase) * mascot.bobAmp;
+  // Nose down when descending (cos > 0 → tilt < 0 ≈ CCW for a left-facing head).
+  const tiltAmp = 0.30;
+  const tilt    = -Math.cos(phase) * tiltAmp;
+
+  // beat (every 0.537s) — tracked but not used directly; ripples are tied to color steps.
+  const beatN = Math.floor(t / BEAT_S);
+  if (beatN > lastBeat) lastBeat = beatN;
+
+  // First frame past the drop: reveal the text overlay with a slam.
+  if (!dropped && t >= INTRO_END_S) {
+    dropped = true;
+    overlay.classList.add("dropped");
   }
 
-  // physics
-  mascot.x += mascot.vx;
-  mascot.y += mascot.vy;
-  // friction
-  mascot.vx *= 0.985;
-  mascot.vy *= 0.985;
-  // floor minimum speed so it never stalls
-  const minSpeed = 0.4;
-  const v = Math.hypot(mascot.vx, mascot.vy);
-  if (v < minSpeed) {
-    const a = Math.random() * Math.PI * 2;
-    mascot.vx = Math.cos(a) * minSpeed;
-    mascot.vy = Math.sin(a) * minSpeed;
+  // On each 8th-note: emit a dog-shaped ripple at the dog's current pose,
+  // in the current palette color. It scales outward forever, fades, drops.
+  const colorN = emitStep(t);
+  if (colorN > lastColor) {
+    lastColor = colorN;
+    colorIdx = (colorIdx + 1) % PALETTE.length;
+    // Per-ripple drift, frozen at emission — keeps the pre-drop trail moving
+    // at 2× and the post-drop trail at 1× without retroactively slowing the
+    // older ripples when the drop hits.
+    const drift = t < INTRO_END_S ? DRIFT_INTRO : DRIFT_NORM;
+    const endScale = inSpiral(t) ? SPIRAL_END_SCALE : RIPPLE_END;
+    ripples.push({
+      x: dogX, y: dogY, w: mascot.w, h: mascot.h, tilt,
+      colorIdx, t0: t, drift, endScale,
+    });
+    // Drive the text glow + neon outline from the same beat-locked palette.
+    document.documentElement.style.setProperty("--tick-color", PALETTE[colorIdx]);
   }
-  // bounce
-  if (mascot.x < 0)                       { mascot.x = 0; mascot.vx = Math.abs(mascot.vx); }
-  if (mascot.x + mascot.w > innerWidth)   { mascot.x = innerWidth - mascot.w; mascot.vx = -Math.abs(mascot.vx); }
-  if (mascot.y < 0)                       { mascot.y = 0; mascot.vy = Math.abs(mascot.vy); }
-  if (mascot.y + mascot.h > innerHeight)  { mascot.y = innerHeight - mascot.h; mascot.vy = -Math.abs(mascot.vy); }
 
-  // render: hard clear to deep black
-  ctx.fillStyle = "#050505";
+  // ─── render ────────────────────────────────────────────────────────────
+  ctx.fillStyle = "#080012";
   ctx.fillRect(0, 0, innerWidth, innerHeight);
 
-  // background beat tint
-  if (beatPulse > 0.01) {
-    ctx.globalAlpha = beatPulse * 0.32;
-    ctx.fillStyle = PALETTE[beatTintIdx];
-    ctx.fillRect(0, 0, innerWidth, innerHeight);
-    ctx.globalAlpha = 1;
-    beatPulse *= 0.85;
+  // Drop expired ripples first.
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    if (t - ripples[i].t0 > RIPPLE_LIFE) ripples.splice(i, 1);
   }
 
-  // trail: oldest-to-newest with fading alpha
-  for (let i = trail.length - 1; i >= 0; i--) {
-    const t = trail[i];
-    const a = (1 - i / TRAIL_LEN) * 0.55;
-    ctx.globalAlpha = a;
-    ctx.drawImage(silhouettes[t.colorIdx], t.x, t.y, mascot.w, mascot.h);
+  // Silhouette-shaped ripples: same dog shape, scaling outward AND drifting
+  // rightward — the rightward bias sells leftward motion of the dog.
+  // Oldest first (biggest, drawn underneath); newest on top (smallest).
+  for (let i = 0; i < ripples.length; i++) {
+    const r = ripples[i];
+    const age   = t - r.t0;
+    const k     = age / RIPPLE_LIFE;
+    const scale = 1 + (r.endScale - 1) * Math.pow(k, 0.7);
+    const alpha = Math.pow(1 - k, 1.1) * 0.9;
+    const dx    = r.drift * age;
+    drawRippleSilhouette(silhouettes[r.colorIdx], r.x + dx, r.y, r.w, r.h, r.tilt, scale, alpha);
   }
   ctx.globalAlpha = 1;
 
-  // foreground mascot
-  ctx.drawImage(mascotImg, mascot.x, mascot.y, mascot.w, mascot.h);
+  // Foreground: full-color hei, anchored at upper-center, only bobbing + tilting.
+  drawSilhouette(mascotImg, dogX, dogY, mascot.w, mascot.h, tilt);
+
+  // Tint pass: bleed the current cycle color onto the dog itself.
+  // `overlay` deepens dark fur with the color while still letting highlights
+  // pop; a second `screen` pass at low alpha boosts the neon halo on whites.
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  ctx.globalCompositeOperation = "overlay";
+  drawSilhouette(silhouettes[colorIdx], dogX, dogY, mascot.w, mascot.h, tilt);
+  ctx.globalAlpha = 0.28;
+  ctx.globalCompositeOperation = "screen";
+  drawSilhouette(silhouettes[colorIdx], dogX, dogY, mascot.w, mascot.h, tilt);
+  ctx.restore();
 
   requestAnimationFrame(tick);
 }
 
+function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.scale(scale, scale);
+  ctx.rotate(tilt);
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
+preload();
+
 enterBtn.addEventListener("click", async () => {
   enterBtn.hidden = true;
-  await loadAssets();
-  await startAudio();
+  overlay.hidden = false;
+  if (!mascotImg) await preload();
+  startAudio(); // fire and forget
   requestAnimationFrame(tick);
 }, { once: true });

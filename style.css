@@ -1,6 +1,16 @@
+@font-face {
+  font-family: "Bungee";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;          /* avoid fallback-font flash during the slam */
+  src: url("/assets/fonts/bungee-latin.woff2") format("woff2");
+  unicode-range: U+0020-007F;   /* GET BARKED only uses ASCII */
+}
+
 :root {
   --bg: #050505;
   --fg: #f5f5f5;
+  --tick-color: #ff006e;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -9,7 +19,7 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--fg);
-  font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
   overflow: hidden;
   cursor: crosshair;
 }
@@ -43,7 +53,8 @@ html, body {
 #enter span {
   opacity: 0.85;
   animation: pulse 1.6s ease-in-out infinite;
-  mix-blend-mode: difference;
+  color: #ff006e;
+  text-shadow: 0 0 22px rgba(255, 0, 110, 0.55);
 }
 
 @keyframes pulse {
@@ -53,25 +64,114 @@ html, body {
 
 #enter[hidden] { display: none; }
 
-#card {
+#overlay {
   position: fixed;
-  inset: auto 0 4vh 0;
+  inset: auto 0 6vh 0;
   z-index: 5;
   text-align: center;
-  font-size: clamp(0.75rem, 1.4vw, 1rem);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.4vh;
+  opacity: 0;            /* hidden during intro; the drop adds .dropped */
+}
+
+#overlay[hidden] { display: none; }
+
+#overlay.dropped { opacity: 1; }
+#overlay.dropped #headline { animation: slam 0.36s cubic-bezier(0.18,1.4,0.36,1) 1, beat-pulse 0.5371s cubic-bezier(.2,.85,.4,1) 0.36s infinite; }
+#overlay.dropped #domain   { animation: fade-up 0.5s 0.2s cubic-bezier(.2,.6,.3,1) backwards; }
+#overlay.dropped #owner    { animation: fade-up 0.5s 0.32s cubic-bezier(.2,.6,.3,1) backwards; }
+
+@keyframes slam {
+  0%   { transform: scale(3.0) translateZ(0) rotate(-6deg); opacity: 0;
+         text-shadow: 0 0 30px var(--tick-color), 0 0 50px var(--tick-color); }
+  55%  { transform: scale(0.9) translateZ(0) rotate(0.7deg); opacity: 1; }
+  100% { transform: scale(1)   translateZ(0) rotate(0);     opacity: 1; }
+}
+
+@keyframes fade-up {
+  0%   { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+#headline {
+  font-family: "Bungee", "JetBrains Mono", system-ui, sans-serif;
+  font-weight: 400;
+  font-size: clamp(2.8rem, 12vw, 10rem);
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  color: var(--tick-color);
+  text-shadow:
+    0 0 8px var(--tick-color),
+    0 0 28px var(--tick-color),
+    0 0 64px var(--tick-color),
+    0 4px 0 rgba(0,0,0,0.5);
+  will-change: transform, text-shadow;
+  transform: translateZ(0);     /* promote to its own composite layer up-front */
+  position: relative;
+  white-space: nowrap;
+}
+
+/* glitch-shift duplicate via ::before/::after using data-text */
+#headline::before,
+#headline::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+#headline::before {
+  color: #00e5ff;
+  transform: translate(-2px, -1px);
+  opacity: 0.55;
+  animation: jitter-a 1.07s steps(8, end) infinite;
+}
+#headline::after {
+  color: #ffd600;
+  transform: translate(2px, 2px);
+  opacity: 0.5;
+  animation: jitter-b 0.83s steps(7, end) infinite;
+}
+
+@keyframes beat-pulse {
+  0%   { transform: scale(1)    translateZ(0) skewX(0deg); }
+  8%   { transform: scale(1.07) translateZ(0) skewX(-1.2deg); }
+  30%  { transform: scale(1.02) translateZ(0) skewX(0deg); }
+  100% { transform: scale(1)    translateZ(0) skewX(0deg); }
+}
+
+@keyframes jitter-a {
+  0%, 100% { transform: translate(-2px, -1px); }
+  25%      { transform: translate(-4px, 1px); }
+  50%      { transform: translate(-1px, -3px); }
+  75%      { transform: translate(-3px, 2px); }
+}
+@keyframes jitter-b {
+  0%, 100% { transform: translate(2px, 2px); }
+  20%      { transform: translate(4px, -1px); }
+  55%      { transform: translate(1px, 3px); }
+  80%      { transform: translate(3px, -2px); }
+}
+
+#domain {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 700;
+  font-size: clamp(1.1rem, 2.6vw, 1.9rem);
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--fg);
+  opacity: 0.92;
+  text-shadow: 0 0 10px var(--tick-color);
+}
+
+#owner {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 400;
+  font-size: clamp(0.7rem, 1.3vw, 1rem);
   letter-spacing: 0.3em;
   text-transform: uppercase;
-  mix-blend-mode: difference;
-  pointer-events: none;
-}
-
-#card .host {
-  display: block;
-  font-weight: 700;
-  margin-bottom: 0.4em;
-}
-
-#card .blurb {
-  display: block;
-  opacity: 0.7;
+  opacity: 0.55;
 }

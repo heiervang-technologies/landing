@@ -6,11 +6,17 @@
   <title>hei</title>
   <link rel="preload" as="image" href="/assets/hei/hei_mask_original.png">
   <link rel="preload" as="audio" href="/assets/audio/hoverboard.mp3">
+  <link rel="preload" as="audio" href="/assets/audio/hoverloop.mp3">
+  <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/bungee-latin.woff2" crossorigin>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <canvas id="stage"></canvas>
-  <main id="card" hidden></main>
+  <section id="overlay" hidden>
+    <h1 id="headline" data-text=""></h1>
+    <div id="domain"></div>
+    <div id="owner"></div>
+  </section>
   <button id="enter" type="button">
     <span>click anywhere</span>
   </button>
