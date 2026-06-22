@@ -46,7 +46,8 @@ export const SITES = {
   "savethe.click":            T("savethe.click"),
   "turingtest.fm":            T("turingtest.fm"),
   "turingtest.music":         T("turingtest.music"),
-  "unleash.software":         T("unleash.software"),
+  // unleash.software intentionally NOT routed here — it serves the
+  // install-remote.sh installer from the unleash repo's own GH Pages site.
 };
 
 // Dev fallback: when running on localhost / loopback / cf .pages.dev preview /
