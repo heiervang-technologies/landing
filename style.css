@@ -112,7 +112,11 @@ html, body {
   white-space: nowrap;
 }
 
-/* glitch-shift duplicate via ::before/::after using data-text */
+/* glitch-shift duplicate via ::before/::after using data-text.
+   will-change: transform promotes each ghost layer onto its own composited
+   surface so jitter-a/jitter-b transforms don't trigger a paint on the parent
+   stacking context — pure compositor work. mix-blend-mode is preserved (the
+   additive CRT-bleed look is part of the design). */
 #headline::before,
 #headline::after {
   content: attr(data-text);
@@ -120,6 +124,7 @@ html, body {
   inset: 0;
   pointer-events: none;
   mix-blend-mode: screen;
+  will-change: transform;
 }
 #headline::before {
   color: #00e5ff;
