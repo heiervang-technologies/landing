@@ -72,11 +72,11 @@ function fitHeadline() {
     elHead.style.fontSize = size + "px";
   }
 }
-// Force-load the Bungee face up-front; otherwise `font-display: block` keeps
+// Force-load the headline face up-front; otherwise `font-display: block` keeps
 // the headline invisible (scrollWidth=0) until the slam drop, and fitHeadline
 // would never measure correctly during the intro. Once the face is in, fit.
 if (document.fonts?.load) {
-  document.fonts.load("400 10rem Bungee").then(fitHeadline, fitHeadline);
+  document.fonts.load('400 5rem "Press Start 2P"').then(fitHeadline, fitHeadline);
 } else {
   fitHeadline();
 }

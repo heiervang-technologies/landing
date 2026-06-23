@@ -1,10 +1,10 @@
 @font-face {
-  font-family: "Bungee";
+  font-family: "Press Start 2P";
   font-style: normal;
   font-weight: 400;
   font-display: block;          /* avoid fallback-font flash during the slam */
-  src: url("/assets/fonts/bungee-latin.woff2") format("woff2");
-  unicode-range: U+0020-007F;   /* GET BARKED only uses ASCII */
+  src: url("/assets/fonts/press-start-2p-latin.woff2") format("woff2");
+  unicode-range: U+0020-007F;   /* hostnames + GET BARKED only use ASCII */
 }
 
 :root {
@@ -95,11 +95,12 @@ html, body {
 }
 
 #headline {
-  font-family: "Bungee", "JetBrains Mono", system-ui, sans-serif;
+  font-family: "Press Start 2P", "JetBrains Mono", ui-monospace, monospace;
   font-weight: 400;
-  font-size: clamp(2.8rem, 12vw, 10rem);
-  line-height: 0.95;
-  letter-spacing: 0.04em;
+  font-size: clamp(1.4rem, 6vw, 5rem);     /* PS2P glyphs fill the em-box,
+                                              ~2x wider than Bungee per char */
+  line-height: 1.1;
+  letter-spacing: 0.02em;
   color: var(--tick-color);
   text-shadow:
     0 0 8px var(--tick-color),
