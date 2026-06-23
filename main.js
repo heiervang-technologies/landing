@@ -277,9 +277,13 @@ let lastBounce = -1;
 let colorIdx = 0;
 let dropped = false;          // toggles true on the first tick past INTRO_END_S
 
-function drawSilhouette(img, x, y, w, h, tilt) {
+function drawSilhouette(img, x, y, w, h, tilt, scaleX = 1) {
   ctx.save();
   ctx.translate(x + w / 2, y + h / 2);
+  // Paper-Mario card flip: horizontal squash applied in SCREEN space (before
+  // the tilt rotation) so the squash axis stays vertical regardless of the
+  // bob tilt — sprite reads as a 2D card pivoting on its vertical center.
+  if (scaleX !== 1) ctx.scale(scaleX, 1);
   ctx.rotate(tilt);
   // Always left-facing (no flip); PNG is natively left-facing.
   ctx.drawImage(img, -w / 2, -h / 2, w, h);
@@ -348,7 +352,11 @@ function tick(nowMs) {
   // emitted with (see r.pose below), so the trail does NOT flip retroactively.
   const pose    = currentPose(t);
   const flipP   = flipProgress(t);
-  const flipRot = flipP !== null ? flipP * 2 * Math.PI : 0;
+  // Paper-Mario flip: squash horizontally from 1 → 0 → 1 as flipP goes 0→1.
+  // |cos(π·flipP)| gives that exact curve. The sprite hits scaleX=0 (edge-on,
+  // invisible) at flipP=0.5, which is the same instant currentPose(t) crosses
+  // its threshold — so the image swap lands inside the invisible frame.
+  const flipScaleX = flipP !== null ? Math.abs(Math.cos(flipP * Math.PI)) : 1;
   const dims    = poseDims[pose];
 
   // bob + tilt — dog stays at center X, only oscillates vertically.
@@ -431,10 +439,10 @@ function tick(nowMs) {
   // of three drawImage calls plus two `globalCompositeOperation` mode switches
   // — eliminates the per-frame full-dog-area pixel read/write that was the
   // dominant canvas cost on slower GPUs after the drop.
-  // During a pose flip we add a full 2π rotation on top of the bob tilt; the
-  // pose value flips at the rotation midpoint (when the sprite is "upside
-  // down"), hiding the image swap inside the spin.
-  drawSilhouette(tintedDogs[pose][colorIdx], dogX, dogY, dims.w, dims.h, tilt + flipRot);
+  // During a pose flip the sprite squashes horizontally (Paper Mario card
+  // flip); the swap lands at flipScaleX=0 so the image change is hidden in
+  // the edge-on frame.
+  drawSilhouette(tintedDogs[pose][colorIdx], dogX, dogY, dims.w, dims.h, tilt, flipScaleX);
 
   requestAnimationFrame(tick);
 }
