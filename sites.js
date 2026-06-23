@@ -37,11 +37,14 @@ export const SITES = {
   "hei.tools":                T("hei.tools"),
   "heiervang.com":            T("heiervang.com"),
   "heiervang.tech":           T("heiervang.tech"),
-  // hover.dog / hoverboard.dog: same page, but the mascot rides a hoverboard.
-  // The hoverboard PNG is left-facing to match the existing motion (the
-  // mascot is always drawn unflipped — see main.js drawSilhouette comment).
-  "hover.dog":                { ...T("hover.dog"),      mascot: "/assets/hei/hei_hoverboard.png" },
-  "hoverboard.dog":           { ...T("hoverboard.dog"), mascot: "/assets/hei/hei_hoverboard.png" },
+  // hover.dog / hoverboard.dog: the mascot rides a hoverboard. Two poses
+  // alternate via a 2D rotation flip:
+  //   - "ride"  = left-facing cruise              (hei_hoverboard.png)
+  //   - "tre"   = arms-wide hype, right-facing    (hei_hoverboard_right.png)
+  // Pose schedule (main.js drives the flips): "tre" during the intro hype,
+  // "ride" through the drop, "tre" during the spiral segment, "ride" after.
+  "hover.dog":                { ...T("hover.dog"),      mascot: "/assets/hei/hei_hoverboard.png", mascotAlt: "/assets/hei/hei_hoverboard_right.png" },
+  "hoverboard.dog":           { ...T("hoverboard.dog"), mascot: "/assets/hei/hei_hoverboard.png", mascotAlt: "/assets/hei/hei_hoverboard_right.png" },
   "hyperpla.net":             T("hyperpla.net"),
   "marku.sh":                 T("marku.sh"),
   "markus.consulting":        T("markus.consulting"),

@@ -147,25 +147,32 @@ function bakeTintedDog(base, tintColor) {
   return c;
 }
 
-let mascotImg = null;
+let mascotImg = null;           // pose 0 — used by resize() to know when to lay out
+let mascotImgs = [];            // [poseA, poseB] — same length as poses (length 1 if no alt)
+// silhouettes[pose][colorIdx] / tintedDogs[pose][colorIdx]: per-pose canvases.
+// Single-mascot sites have a length-1 outer array; the renderer just clamps.
 let silhouettes = [];
-let tintedDogs  = [];   // pre-composed base + overlay-tint + screen-tint, one per PALETTE color
-const ripples = [];   // {x, y, w, h, tilt, colorIdx, t0}  — silhouette-shaped, scales outward
+let tintedDogs  = [];   // pre-composed base + overlay-tint + screen-tint per (pose,color)
+let poseDims    = [{w: 0, h: 0}];  // each pose has its own aspect ratio
+const ripples = [];   // {x, y, w, h, tilt, colorIdx, t0, pose}  — pose frozen at emission
 
 const mascot = {
   centerX: 0, centerY: 0,
   bobAmp: 0,
-  w: 0, h: 0,
 };
 
 function layout() {
   // Inflated, central-ish. Scaled larger and lifted up so GET BARKED + the
   // domain block can sit underneath without the dog overlapping them.
+  // Each pose preserves its native aspect ratio — the hoverboard variants are
+  // shaped differently (one is taller, one is wider with arms out), and
+  // stretching either to match the other would distort the artwork.
   const minDim  = Math.min(innerHeight, innerWidth);
   const targetH = minDim * 0.46;
-  const scale   = targetH / mascotImg.height;
-  mascot.w = mascotImg.width  * scale;
-  mascot.h = mascotImg.height * scale;
+  poseDims = mascotImgs.map((img) => ({
+    w: img.width * (targetH / img.height),
+    h: targetH,
+  }));
   mascot.centerX = innerWidth * 0.5;
   mascot.centerY = innerHeight * 0.30;     // higher up — text block lives below
   mascot.bobAmp  = minDim * 0.073;          // 66% of previous 0.11
@@ -173,11 +180,15 @@ function layout() {
 
 async function preload() {
   // Per-site mascot override (see sites.js): hover.dog / hoverboard.dog ship
-  // a hoverboarding variant. Falls back to the default left-facing mascot.
-  const mascotSrc = cfg.mascot || "/assets/hei/hei_mask_original.png";
-  mascotImg   = await loadImage(mascotSrc);
-  silhouettes = PALETTE.map((c) => bakeSilhouette(mascotImg, c));
-  tintedDogs  = PALETTE.map((c) => bakeTintedDog(mascotImg, c));
+  // a hoverboarding variant with two alternating poses; everything else uses
+  // a single mascot. When `cfg.mascotAlt` is set, the two poses are toggled
+  // via a 2π rotation flip on intro / spiral boundaries (see currentPose()).
+  const srcA = cfg.mascot    || "/assets/hei/hei_mask_original.png";
+  const srcs = cfg.mascotAlt ? [srcA, cfg.mascotAlt] : [srcA];
+  mascotImgs  = await Promise.all(srcs.map(loadImage));
+  mascotImg   = mascotImgs[0];
+  silhouettes = mascotImgs.map((img) => PALETTE.map((c) => bakeSilhouette(img, c)));
+  tintedDogs  = mascotImgs.map((img) => PALETTE.map((c) => bakeTintedDog(img, c)));
   resize();
 }
 
@@ -298,6 +309,32 @@ function emitStep(t) {
 
 function inSpiral(t) { return t >= SPIRAL_START && t < SPIRAL_END; }
 
+// ─── Pose schedule (hover.dog / hoverboard.dog only) ─────────────────────
+// Pose 1 = arms-wide "hype" frame. Pose 0 = the cruise frame. The schedule
+// flips on three boundaries: drop (intro → cruise), spiral start (cruise →
+// hype), spiral end (hype → cruise). For single-pose sites the function is
+// a no-op (poseCount=1 → result clamped to 0).
+const FLIP_DUR     = 0.36;   // matches the slam keyframe duration
+const FLIP_TIMES   = [INTRO_END_S, SPIRAL_START, SPIRAL_END];
+function currentPose(t) {
+  if (mascotImgs.length < 2) return 0;
+  // Pose 1 during the intro hype AND during the spiral; pose 0 otherwise.
+  if (t < INTRO_END_S) return 1;
+  if (t >= SPIRAL_START && t < SPIRAL_END) return 1;
+  return 0;
+}
+// Centered on each FLIP_TIME so the swap happens AT the beat boundary, with
+// half the rotation playing before and half after. Returns null outside any
+// flip window (live dog drawn untilted by the flip — the bob tilt still runs).
+function flipProgress(t) {
+  if (mascotImgs.length < 2) return null;
+  for (const ft of FLIP_TIMES) {
+    const s = ft - FLIP_DUR / 2, e = ft + FLIP_DUR / 2;
+    if (t >= s && t < e) return (t - s) / FLIP_DUR;
+  }
+  return null;
+}
+
 function tick(nowMs) {
   if (startMs === 0) startMs = nowMs;
   // Once audio is running, derive t from the AudioContext clock so visuals
@@ -307,10 +344,17 @@ function tick(nowMs) {
     ? audioCtx.currentTime - audioT0
     : (nowMs - startMs) / 1000;
 
+  // Pose for the live dog this frame. Note: ripples freeze the pose they were
+  // emitted with (see r.pose below), so the trail does NOT flip retroactively.
+  const pose    = currentPose(t);
+  const flipP   = flipProgress(t);
+  const flipRot = flipP !== null ? flipP * 2 * Math.PI : 0;
+  const dims    = poseDims[pose];
+
   // bob + tilt — dog stays at center X, only oscillates vertically.
   const phase = bobPhase(t);
-  const dogX  = mascot.centerX - mascot.w / 2;
-  const dogY  = mascot.centerY - mascot.h / 2 + Math.sin(phase) * mascot.bobAmp;
+  const dogX  = mascot.centerX - dims.w / 2;
+  const dogY  = mascot.centerY - dims.h / 2 + Math.sin(phase) * mascot.bobAmp;
   // Nose down when descending (cos > 0 → tilt < 0 ≈ CCW for a left-facing head).
   const tiltAmp = 0.30;
   const tilt    = -Math.cos(phase) * tiltAmp;
@@ -337,8 +381,8 @@ function tick(nowMs) {
     const drift = t < INTRO_END_S ? DRIFT_INTRO : DRIFT_NORM;
     const endScale = inSpiral(t) ? SPIRAL_END_SCALE : RIPPLE_END;
     ripples.push({
-      x: dogX, y: dogY, w: mascot.w, h: mascot.h, tilt,
-      colorIdx, t0: t, drift, endScale,
+      x: dogX, y: dogY, w: dims.w, h: dims.h, tilt,
+      colorIdx, t0: t, drift, endScale, pose,
     });
     // Drive the silhouette-locked glow (used by domain shadow, slam keyframe).
     document.documentElement.style.setProperty("--tick-color", PALETTE[colorIdx]);
@@ -377,7 +421,7 @@ function tick(nowMs) {
     const scale = 1 + (r.endScale - 1) * Math.pow(k, 0.7);
     const alpha = Math.pow(1 - k, 1.1) * 0.9;
     const dx    = r.drift * age;
-    drawRippleSilhouette(silhouettes[r.colorIdx], r.x + dx, r.y, r.w, r.h, r.tilt, scale, alpha);
+    drawRippleSilhouette(silhouettes[r.pose ?? 0][r.colorIdx], r.x + dx, r.y, r.w, r.h, r.tilt, scale, alpha);
   }
   ctx.globalAlpha = 1;
 
@@ -387,7 +431,10 @@ function tick(nowMs) {
   // of three drawImage calls plus two `globalCompositeOperation` mode switches
   // — eliminates the per-frame full-dog-area pixel read/write that was the
   // dominant canvas cost on slower GPUs after the drop.
-  drawSilhouette(tintedDogs[colorIdx], dogX, dogY, mascot.w, mascot.h, tilt);
+  // During a pose flip we add a full 2π rotation on top of the bob tilt; the
+  // pose value flips at the rotation midpoint (when the sprite is "upside
+  // down"), hiding the image swap inside the spin.
+  drawSilhouette(tintedDogs[pose][colorIdx], dogX, dogY, dims.w, dims.h, tilt + flipRot);
 
   requestAnimationFrame(tick);
 }
