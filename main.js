@@ -172,7 +172,10 @@ function layout() {
 }
 
 async function preload() {
-  mascotImg   = await loadImage("/assets/hei/hei_mask_original.png");
+  // Per-site mascot override (see sites.js): hover.dog / hoverboard.dog ship
+  // a hoverboarding variant. Falls back to the default left-facing mascot.
+  const mascotSrc = cfg.mascot || "/assets/hei/hei_mask_original.png";
+  mascotImg   = await loadImage(mascotSrc);
   silhouettes = PALETTE.map((c) => bakeSilhouette(mascotImg, c));
   tintedDogs  = PALETTE.map((c) => bakeTintedDog(mascotImg, c));
   resize();

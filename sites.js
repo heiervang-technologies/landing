@@ -37,8 +37,11 @@ export const SITES = {
   "hei.tools":                T("hei.tools"),
   "heiervang.com":            T("heiervang.com"),
   "heiervang.tech":           T("heiervang.tech"),
-  "hover.dog":                T("hover.dog"),
-  "hoverboard.dog":           T("hoverboard.dog"),
+  // hover.dog / hoverboard.dog: same page, but the mascot rides a hoverboard.
+  // The hoverboard PNG is left-facing to match the existing motion (the
+  // mascot is always drawn unflipped — see main.js drawSilhouette comment).
+  "hover.dog":                { ...T("hover.dog"),      mascot: "/assets/hei/hei_hoverboard.png" },
+  "hoverboard.dog":           { ...T("hoverboard.dog"), mascot: "/assets/hei/hei_hoverboard.png" },
   "hyperpla.net":             T("hyperpla.net"),
   "marku.sh":                 T("marku.sh"),
   "markus.consulting":        T("markus.consulting"),
