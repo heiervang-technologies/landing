@@ -1,9 +1,12 @@
-# Code: short cache so deploys propagate quickly.
-/*.js
+# Code: short cache so deploys propagate quickly. CF Pages globs are
+# segment-based — name each top-level file explicitly.
+/main.js
   Cache-Control: public, max-age=300, must-revalidate
-/*.css
+/sites.js
   Cache-Control: public, max-age=300, must-revalidate
-/*.html
+/style.css
+  Cache-Control: public, max-age=300, must-revalidate
+/index.html
   Cache-Control: public, max-age=0, must-revalidate
 
 # Big binaries: cache long; we change the filename when content changes.
