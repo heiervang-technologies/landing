@@ -10,7 +10,9 @@
 :root {
   --bg: #050505;
   --fg: #f5f5f5;
-  --tick-color: #ff006e;
+  --tick-color: #ff006e;    /* silhouette palette tick (every 8th-note) */
+  --text-color: #ff006e;    /* headline color — same palette, but stepped at
+                               half the silhouette rate (once per beat) */
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,38 +33,6 @@ html, body {
   height: 100vh;
   display: block;
 }
-
-#enter {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  background: transparent;
-  border: 0;
-  color: var(--fg);
-  font: inherit;
-  font-size: clamp(1rem, 3vw, 2rem);
-  letter-spacing: 0.4em;
-  text-transform: uppercase;
-  cursor: crosshair;
-  z-index: 10;
-  display: grid;
-  place-items: center;
-}
-
-#enter span {
-  opacity: 0.85;
-  animation: pulse 1.6s ease-in-out infinite;
-  color: #ff006e;
-  text-shadow: 0 0 22px rgba(255, 0, 110, 0.55);
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.35; }
-  50%      { opacity: 1; }
-}
-
-#enter[hidden] { display: none; }
 
 #overlay {
   position: fixed;
@@ -101,11 +71,13 @@ html, body {
                                               ~2x wider than Bungee per char */
   line-height: 1.1;
   letter-spacing: 0.02em;
-  color: var(--tick-color);
+  color: var(--text-color);
+  /* Saturated halo, no inner blowout: the close-in 8px layer used to stack
+     onto the glyphs and wash the chosen color toward white. Wider, single-
+     density blurs keep the neon color directly visible at the pixel edges. */
   text-shadow:
-    0 0 8px var(--tick-color),
-    0 0 28px var(--tick-color),
-    0 0 64px var(--tick-color),
+    0 0 20px var(--text-color),
+    0 0 56px var(--text-color),
     0 4px 0 rgba(0,0,0,0.5);
   will-change: transform, text-shadow;
   transform: translateZ(0);     /* promote to its own composite layer up-front */
@@ -127,16 +99,19 @@ html, body {
   mix-blend-mode: screen;
   will-change: transform;
 }
+/* Glitch ghosts: cyan/yellow with screen blend used to add to the magenta base
+   and bleach the overlap regions toward white. Halve opacity so the chromatic
+   aberration reads as a thin colored fringe instead of a bright bleed. */
 #headline::before {
   color: #00e5ff;
   transform: translate(-2px, -1px);
-  opacity: 0.55;
+  opacity: 0.28;
   animation: jitter-a 1.07s steps(8, end) infinite;
 }
 #headline::after {
   color: #ffd600;
   transform: translate(2px, 2px);
-  opacity: 0.5;
+  opacity: 0.24;
   animation: jitter-b 0.83s steps(7, end) infinite;
 }
 
@@ -191,5 +166,4 @@ html, body {
   }
   #headline::before,
   #headline::after { animation: none; }
-  #enter span { animation: none; opacity: 1; }
 }

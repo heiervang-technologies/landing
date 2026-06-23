@@ -47,7 +47,6 @@ const PALETTE = [
 
 const canvas   = document.getElementById("stage");
 const ctx      = canvas.getContext("2d");
-const enterBtn = document.getElementById("enter");
 const overlay  = document.getElementById("overlay");
 const elHead   = document.getElementById("headline");
 const elDom    = document.getElementById("domain");
@@ -170,33 +169,51 @@ async function preload() {
 }
 
 let audioCtx;
-let audioT0 = null;     // audioCtx.currentTime captured when the intro started
+let audioT0 = null;     // audioCtx.currentTime that maps to visual t=0
+let audioStarted = false;
+let introBuf = null, loopBuf = null, audioGain = null;
 async function decodeUrl(url) {
   const res = await fetch(url);
   const buf = await res.arrayBuffer();
   return audioCtx.decodeAudioData(buf);
 }
-async function startAudio() {
+// Decode the audio up-front so the first user gesture can start playback
+// instantly with no fetch/decode delay. Creates a suspended AudioContext;
+// browser autoplay policy will refuse to actually emit sound until a gesture.
+async function prepareAudio() {
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const gain = audioCtx.createGain();
-    gain.gain.value = 0.85;
-    gain.connect(audioCtx.destination);
-
-    // intro.wav plays once; at its scheduled end-time, loop.wav starts
-    // looping forever. Both are scheduled on the AudioContext clock so the
-    // hand-off is sample-accurate. Raw WAV (uncompressed PCM) is used so
-    // there is ZERO encoder padding — Opus/MP3 both add silent samples at
-    // stream boundaries that decodeAudioData doesn't always strip, which
-    // creates an audible silence-blip at every loop iteration.
-    const [introBuf, loopBuf] = await Promise.all([
+    audioGain = audioCtx.createGain();
+    audioGain.gain.value = 0.85;
+    audioGain.connect(audioCtx.destination);
+    [introBuf, loopBuf] = await Promise.all([
       decodeUrl("/assets/audio/intro.wav"),
       decodeUrl("/assets/audio/loop.wav"),
     ]);
+  } catch (_) {
+    // Audio is non-essential to the visual. Swallow failures (e.g. headless).
+  }
+}
+// Kick off audio aligned to the visual clock already in progress. We compute
+// the current visual t (rAF-based) and start the intro/loop with a buffer
+// offset that matches, so audio joins mid-song without resetting the visuals.
+// Raw WAV (uncompressed PCM) is used so there is ZERO encoder padding — Opus/
+// MP3 add silent samples at stream boundaries that decodeAudioData doesn't
+// always strip, which creates an audible silence-blip at each loop wrap.
+function startAudioAt(visualT) {
+  if (audioStarted || !audioCtx || !introBuf || !loopBuf) return;
+  audioStarted = true;
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
 
+  const startAt = audioCtx.currentTime + 0.02;
+  // audioT0 is the audioCtx time that corresponds to visual t=0.
+  audioT0 = startAt - visualT;
+
+  if (visualT < introBuf.duration) {
     const firstSrc = audioCtx.createBufferSource();
     firstSrc.buffer = introBuf;
-    firstSrc.connect(gain);
+    firstSrc.connect(audioGain);
+    firstSrc.start(startAt, visualT);
 
     const loopSrc = audioCtx.createBufferSource();
     loopSrc.buffer = loopBuf;
@@ -207,16 +224,18 @@ async function startAudio() {
     // only subsequent wraps use loopStart.
     loopSrc.loopStart = 3 / loopBuf.sampleRate;
     loopSrc.loopEnd   = loopBuf.duration;
-    loopSrc.connect(gain);
-
-    const startAt = audioCtx.currentTime + 0.02;
-    firstSrc.start(startAt);
-    loopSrc.start(startAt + introBuf.duration);
-    // Lock visual time to the audio clock so they can never drift apart.
-    // tick() reads audioT0 below; until it's set, rAF time is used.
-    audioT0 = startAt;
-  } catch (_) {
-    // Audio is non-essential to the visual. Swallow failures (e.g. headless).
+    loopSrc.connect(audioGain);
+    loopSrc.start(startAt + (introBuf.duration - visualT));
+  } else {
+    // Past the intro already — start the loop directly at the right phase.
+    const loopOffset = (visualT - introBuf.duration) % loopBuf.duration;
+    const loopSrc = audioCtx.createBufferSource();
+    loopSrc.buffer = loopBuf;
+    loopSrc.loop = true;
+    loopSrc.loopStart = 3 / loopBuf.sampleRate;
+    loopSrc.loopEnd   = loopBuf.duration;
+    loopSrc.connect(audioGain);
+    loopSrc.start(startAt, loopOffset);
   }
 }
 
@@ -300,8 +319,14 @@ function tick(nowMs) {
       x: dogX, y: dogY, w: mascot.w, h: mascot.h, tilt,
       colorIdx, t0: t, drift, endScale,
     });
-    // Drive the text glow + neon outline from the same beat-locked palette.
+    // Drive the silhouette-locked glow (used by domain shadow, slam keyframe).
     document.documentElement.style.setProperty("--tick-color", PALETTE[colorIdx]);
+    // Headline text color: in sync with the same palette but stepped at HALF
+    // the silhouette rate — once per beat instead of every 8th-note. Snap to
+    // even colorN so the change lands on the on-beat ticks.
+    if (colorN % 2 === 0) {
+      document.documentElement.style.setProperty("--text-color", PALETTE[colorIdx]);
+    }
   }
 
   // ─── render ────────────────────────────────────────────────────────────
@@ -348,11 +373,25 @@ function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha) {
   ctx.restore();
 }
 
-preload();
-
-enterBtn.addEventListener("click", async () => {
-  enterBtn.hidden = true;
-  if (!mascotImg) await preload();
-  startAudio(); // fire and forget
+// Boot: as soon as the image+audio assets are ready, start the visuals.
+// Audio can't actually play until the user gives the page a gesture (browser
+// autoplay policy), so it stays pre-decoded and dormant until the first
+// pointerdown/keydown anywhere on the page. That gesture wires audio in with
+// an offset that matches the visual clock — no resync jump, no UI prompt.
+(async function boot() {
+  await Promise.all([preload(), prepareAudio()]);
+  startMs = performance.now();
   requestAnimationFrame(tick);
-}, { once: true });
+  // Try an immediate audio start (will succeed if the browser granted
+  // autoplay, e.g. user has interacted with this origin recently).
+  startAudioAt(0);
+  if (!audioStarted) {
+    const start = () => {
+      const visualT = (performance.now() - startMs) / 1000;
+      startAudioAt(Math.max(0, visualT));
+    };
+    ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
+      addEventListener(ev, start, { once: true, passive: true })
+    );
+  }
+})();
