@@ -1,9 +1,11 @@
 import { configFor } from "/sites.js";
 
-// Track BPM derived from the loop file: loop.webm is 45.96s and contains
-// 86 beats → 86 * 60 / 45.96 ≈ 112.27 BPM. Visuals are scripted off this —
-// no live audio analysis. Audio plays alongside; timing stays locked because
-// the loop is a perfect integer-beat repeat.
+// Track BPM derived from the original loop master: 86 beats in 45.96s →
+// 112.27 BPM. The shipped loop.wav has the false-ending breakdown spliced
+// out (now 31.02s), so it carries ~58 of the original 86 beats — the tempo
+// is identical, just shorter. Visuals are scripted off BPM, no live audio
+// analysis. Audio plays alongside; timing stays locked across the loop seam
+// because the splice is integer-beat-aligned + crossfaded.
 const BPM         = 112.27;
 const BEAT_S      = 60 / BPM;            // ~0.537 s
 const COLOR_S     = BEAT_S / 2;          // 8th-note color advance — also the ripple emit rate
@@ -112,8 +114,33 @@ function bakeSilhouette(mask, color) {
   return c;
 }
 
+// Pre-bake the full tinted-dog composite (base mascot + overlay tint + screen
+// tint) once per palette color. Per-frame this lets us blit ONE finished
+// canvas instead of running two `globalCompositeOperation` passes (overlay +
+// screen) on the live stage every frame — those are the expensive ones, since
+// each requires reading the destination pixels under the dog's bounding box
+// at DPR×DPR resolution and rewriting them. Pre-baking is pixel-identical to
+// the previous live composite because the tilt/scale is applied identically
+// to the original and the tint (same translate→rotate→drawImage sequence).
+function bakeTintedDog(base, tintColor) {
+  const c = document.createElement("canvas");
+  c.width  = base.width;
+  c.height = base.height;
+  const k = c.getContext("2d");
+  const tint = bakeSilhouette(base, tintColor);
+  k.drawImage(base, 0, 0);
+  k.globalAlpha = 0.55;
+  k.globalCompositeOperation = "overlay";
+  k.drawImage(tint, 0, 0);
+  k.globalAlpha = 0.28;
+  k.globalCompositeOperation = "screen";
+  k.drawImage(tint, 0, 0);
+  return c;
+}
+
 let mascotImg = null;
 let silhouettes = [];
+let tintedDogs  = [];   // pre-composed base + overlay-tint + screen-tint, one per PALETTE color
 const ripples = [];   // {x, y, w, h, tilt, colorIdx, t0}  — silhouette-shaped, scales outward
 
 const mascot = {
@@ -138,6 +165,7 @@ function layout() {
 async function preload() {
   mascotImg   = await loadImage("/assets/hei/hei_mask_original.png");
   silhouettes = PALETTE.map((c) => bakeSilhouette(mascotImg, c));
+  tintedDogs  = PALETTE.map((c) => bakeTintedDog(mascotImg, c));
   resize();
 }
 
@@ -299,20 +327,13 @@ function tick(nowMs) {
   }
   ctx.globalAlpha = 1;
 
-  // Foreground: full-color hei, anchored at upper-center, only bobbing + tilting.
-  drawSilhouette(mascotImg, dogX, dogY, mascot.w, mascot.h, tilt);
-
-  // Tint pass: bleed the current cycle color onto the dog itself.
-  // `overlay` deepens dark fur with the color while still letting highlights
-  // pop; a second `screen` pass at low alpha boosts the neon halo on whites.
-  ctx.save();
-  ctx.globalAlpha = 0.55;
-  ctx.globalCompositeOperation = "overlay";
-  drawSilhouette(silhouettes[colorIdx], dogX, dogY, mascot.w, mascot.h, tilt);
-  ctx.globalAlpha = 0.28;
-  ctx.globalCompositeOperation = "screen";
-  drawSilhouette(silhouettes[colorIdx], dogX, dogY, mascot.w, mascot.h, tilt);
-  ctx.restore();
+  // Foreground: full-color hei pre-blended with the current palette tint.
+  // The base mascot + overlay-tint + screen-tint composite is baked at startup
+  // (see bakeTintedDog) so the per-frame draw is a single rotated blit instead
+  // of three drawImage calls plus two `globalCompositeOperation` mode switches
+  // — eliminates the per-frame full-dog-area pixel read/write that was the
+  // dominant canvas cost on slower GPUs after the drop.
+  drawSilhouette(tintedDogs[colorIdx], dogX, dogY, mascot.w, mascot.h, tilt);
 
   requestAnimationFrame(tick);
 }
