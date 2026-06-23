@@ -270,20 +270,21 @@ async function prepareAudio() {
 // MP3 add silent samples at stream boundaries that decodeAudioData doesn't
 // always strip, which creates an audible silence-blip at each loop wrap.
 async function startAudioAt(visualT) {
-  if (audioStarted || !audioCtx || !introBuf || !loopBuf) return;
-  // Claim the flag SYNCHRONOUSLY before the await so a burst of clicks can't
-  // each pass the guard, each await resume(), and each spawn a fresh pair of
-  // BufferSources — every extra pair plays in parallel = stacked audio.
-  // If resume() ends up failing (autoplay still blocked), give the flag back.
-  audioStarted = true;
+  if (audioStarted || !audioCtx || !introBuf || !loopBuf) return false;
   // Browser autoplay policy: resume() is rejected (or no-op) without a user
-  // gesture. CRITICAL: don't set audioT0 until we confirm the context actually
-  // transitioned to "running" — otherwise tick() switches to a FROZEN
-  // audioCtx.currentTime and visuals lock up mid-animation.
+  // gesture. Don't claim the schedule slot until AFTER the resume — otherwise
+  // a still-pending optimistic resume() (no gesture, will fail) blocks the
+  // real user-gesture caller from scheduling, leaving audio muted.
+  // Race-safety: JS is single-threaded between awaits, so the post-resume
+  // {check audioStarted → set true → schedule} block runs atomically, and a
+  // second concurrent caller that reaches its own post-resume check will see
+  // the flag set and return without double-scheduling.
   if (audioCtx.state === "suspended") {
-    try { await audioCtx.resume(); } catch (_) {}
-    if (audioCtx.state !== "running") { audioStarted = false; return; }
+    try { await audioCtx.resume(); } catch (_) { return false; }
   }
+  if (audioCtx.state !== "running") return false;
+  if (audioStarted) return false;
+  audioStarted = true;
 
   const startAt = audioCtx.currentTime + 0.02;
   // audioT0 is the audioCtx time that corresponds to visual t=0.
@@ -317,6 +318,7 @@ async function startAudioAt(visualT) {
     loopSrc.connect(audioGain);
     loopSrc.start(startAt, loopOffset);
   }
+  return true;
 }
 
 let startMs = 0;
@@ -544,15 +546,16 @@ function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha) {
     if (visualsStarted) return;
     await audioReady;
     if (visualsStarted) return;
-    await startAudioAt(0);
-    // startAudioAt flips audioStarted back to false when autoplay is blocked,
-    // so this gate distinguishes "audio is actually running" from "browser
-    // said no, wait for the next gesture".
-    if (!audioStarted) return;
+    // startAudioAt returns true only when it actually scheduled the buffer
+    // sources (resume() succeeded + this caller won the schedule race). If it
+    // returns false, our caller wasn't the one to start audio — either the
+    // browser refused (no gesture yet) OR a concurrent caller scheduled first.
+    // In either case, DON'T claim the visuals slot; leave attract showing so
+    // the next real gesture can drive a fresh attempt.
+    const ok = await startAudioAt(0);
+    if (!ok) return;
     // Re-check AFTER the await — multiple concurrent beginPlay() callers can
-    // all pass the earlier visualsStarted guards and all reach startAudioAt
-    // (itself race-safe). The first one through here claims the rAF kick;
-    // the rest must short-circuit or we'd run tick() twice per frame.
+    // all reach this point; only one should claim the rAF kick.
     if (visualsStarted) return;
     visualsStarted = true;
     attractEl?.classList.add("hidden");
