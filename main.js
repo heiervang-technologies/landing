@@ -173,6 +173,12 @@ async function startAudio() {
     const loopSrc = audioCtx.createBufferSource();
     loopSrc.buffer = loopBuf;
     loopSrc.loop = true;
+    // Skip the first 3 samples on each wrap so the loop boundary lands on a
+    // sample where the waveform matches the file's last sample within 0.002
+    // (sub-audible). The full loop still plays once on the first iteration;
+    // only subsequent wraps use loopStart.
+    loopSrc.loopStart = 3 / loopBuf.sampleRate;
+    loopSrc.loopEnd   = loopBuf.duration;
     loopSrc.connect(gain);
 
     const startAt = audioCtx.currentTime + 0.02;
