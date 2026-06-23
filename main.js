@@ -16,6 +16,10 @@ const COLOR_S     = BEAT_S / 2;          // 8th-note color advance — also the 
 // INTRO_END_S = 26 * COLOR_S ≈ 6.98 s, lining up with Markus's "6/7 s in".
 const DROP_STEP   = 25;
 const INTRO_END_S = DROP_STEP * COLOR_S; // ≈ 6.713 s
+// Beat-pulse CSS animation kicks in 0.36s after the slam (delay matches the
+// slam-keyframe duration) and runs at BEAT_S. Text color advances at every
+// cycle start so it lands on the same frame as the bounce.
+const BOUNCE_OFFSET = INTRO_END_S + 0.36;
 
 // During the build, the dog bobs and the trail drifts at 2× pace; on the
 // drop step both relax to the steady-state values.
@@ -82,12 +86,18 @@ if (document.fonts?.load) {
 
 let dpr = 1;
 function resize() {
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // Cap at 1: the mascot is pixel-art and the silhouettes/tintedDogs are
+  // pre-baked at the source PNG's resolution, so 2× DPR is 4× the fill
+  // cost per frame for no visible benefit (smoothing is off — see below).
+  dpr = 1;
   canvas.width  = Math.floor(innerWidth * dpr);
   canvas.height = Math.floor(innerHeight * dpr);
   canvas.style.width  = innerWidth  + "px";
   canvas.style.height = innerHeight + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // Pixel-art aesthetic: no bilinear filtering on scaled drawImage calls.
+  // Also skips an interpolation pass per ripple paint, modest CPU/GPU win.
+  ctx.imageSmoothingEnabled = false;
   if (mascotImg) layout();
 }
 addEventListener("resize", () => { resize(); fitHeadline(); });
@@ -242,6 +252,7 @@ function startAudioAt(visualT) {
 let startMs = 0;
 let lastBeat = -1;
 let lastColor = -1;
+let lastBounce = -1;
 let colorIdx = 0;
 let dropped = false;          // toggles true on the first tick past INTRO_END_S
 
@@ -321,10 +332,18 @@ function tick(nowMs) {
     });
     // Drive the silhouette-locked glow (used by domain shadow, slam keyframe).
     document.documentElement.style.setProperty("--tick-color", PALETTE[colorIdx]);
-    // Headline text color: in sync with the same palette but stepped at HALF
-    // the silhouette rate — once per beat instead of every 8th-note. Snap to
-    // even colorN so the change lands on the on-beat ticks.
-    if (colorN % 2 === 0) {
+  }
+
+  // Headline text color: locked to the beat-pulse animation's cycle start so
+  // the color change lands on the same frame as the bounce. The beat-pulse
+  // CSS animation begins at INTRO_END_S + 0.36s (after the slam) and runs at
+  // BEAT_S, so bounce N starts at BOUNCE_OFFSET + N * BEAT_S. On each new
+  // bounce, snap the text to whatever color the silhouette is showing now —
+  // "in sync but at half the rate" of the 8th-note silhouette tick.
+  if (t >= BOUNCE_OFFSET) {
+    const bounceN = Math.floor((t - BOUNCE_OFFSET) / BEAT_S);
+    if (bounceN > lastBounce) {
+      lastBounce = bounceN;
       document.documentElement.style.setProperty("--text-color", PALETTE[colorIdx]);
     }
   }
@@ -379,19 +398,27 @@ function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha) {
 // pointerdown/keydown anywhere on the page. That gesture wires audio in with
 // an offset that matches the visual clock — no resync jump, no UI prompt.
 (async function boot() {
-  await Promise.all([preload(), prepareAudio()]);
+  // Visuals only need the mascot image — start them the instant it loads.
+  // Audio decode runs in parallel and joins later via the gesture handler
+  // (or autoplay if granted) without blocking the first frame.
+  await preload();
   startMs = performance.now();
   requestAnimationFrame(tick);
-  // Try an immediate audio start (will succeed if the browser granted
-  // autoplay, e.g. user has interacted with this origin recently).
-  startAudioAt(0);
-  if (!audioStarted) {
-    const start = () => {
-      const visualT = (performance.now() - startMs) / 1000;
-      startAudioAt(Math.max(0, visualT));
-    };
+  const audioReady = prepareAudio();
+  const tryStart = async () => {
+    await audioReady;
+    const visualT = (performance.now() - startMs) / 1000;
+    startAudioAt(Math.max(0, visualT));
+  };
+  tryStart();   // optimistic autoplay attempt
+  // First user gesture anywhere wires audio in at the matching visual offset.
+  const onGesture = () => { tryStart(); removeListeners(); };
+  const removeListeners = () => {
     ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
-      addEventListener(ev, start, { once: true, passive: true })
+      removeEventListener(ev, onGesture)
     );
-  }
+  };
+  ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
+    addEventListener(ev, onGesture, { passive: true })
+  );
 })();

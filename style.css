@@ -72,13 +72,15 @@ html, body {
   line-height: 1.1;
   letter-spacing: 0.02em;
   color: var(--text-color);
-  /* Saturated halo, no inner blowout: the close-in 8px layer used to stack
-     onto the glyphs and wash the chosen color toward white. Wider, single-
-     density blurs keep the neon color directly visible at the pixel edges. */
+  /* Cheap, saturated halo: ONE tight blur for the neon glow + a chunky pixel
+     offset for the CRT-style drop. The 56px wide-blur layer that used to be
+     here is the most expensive part of text-shadow paint (the blur kernel
+     grows quadratically), and we repaint on every bounce — keeping it tight
+     keeps the per-bounce paint cost low. The pixel-art glyphs don't need a
+     soft outer halo; a saturated tight one reads as neon, not blown out. */
   text-shadow:
-    0 0 20px var(--text-color),
-    0 0 56px var(--text-color),
-    0 4px 0 rgba(0,0,0,0.5);
+    0 0 14px var(--text-color),
+    3px 3px 0 rgba(0,0,0,0.55);
   will-change: transform, text-shadow;
   transform: translateZ(0);     /* promote to its own composite layer up-front */
   position: relative;
