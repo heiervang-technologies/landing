@@ -210,10 +210,17 @@ async function prepareAudio() {
 // Raw WAV (uncompressed PCM) is used so there is ZERO encoder padding — Opus/
 // MP3 add silent samples at stream boundaries that decodeAudioData doesn't
 // always strip, which creates an audible silence-blip at each loop wrap.
-function startAudioAt(visualT) {
+async function startAudioAt(visualT) {
   if (audioStarted || !audioCtx || !introBuf || !loopBuf) return;
+  // Browser autoplay policy: resume() is rejected (or no-op) without a user
+  // gesture. CRITICAL: don't set audioT0 / audioStarted until we confirm the
+  // context actually transitioned to "running" — otherwise tick() switches
+  // to a FROZEN audioCtx.currentTime and visuals lock up mid-animation.
+  if (audioCtx.state === "suspended") {
+    try { await audioCtx.resume(); } catch (_) {}
+    if (audioCtx.state !== "running") return;
+  }
   audioStarted = true;
-  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
 
   const startAt = audioCtx.currentTime + 0.02;
   // audioT0 is the audioCtx time that corresponds to visual t=0.
@@ -407,18 +414,16 @@ function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha) {
   const audioReady = prepareAudio();
   const tryStart = async () => {
     await audioReady;
+    if (audioStarted) return;
     const visualT = (performance.now() - startMs) / 1000;
-    startAudioAt(Math.max(0, visualT));
+    await startAudioAt(Math.max(0, visualT));
   };
-  tryStart();   // optimistic autoplay attempt
-  // First user gesture anywhere wires audio in at the matching visual offset.
-  const onGesture = () => { tryStart(); removeListeners(); };
-  const removeListeners = () => {
-    ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
-      removeEventListener(ev, onGesture)
-    );
-  };
+  // Optimistic autoplay (browser may or may not grant it).
+  tryStart();
+  // Every user gesture re-attempts. startAudioAt is idempotent (early-exits
+  // if already started, or if the context is still suspended after resume),
+  // so leaving the listeners attached is safe and self-clearing in effect.
   ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
-    addEventListener(ev, onGesture, { passive: true })
+    addEventListener(ev, tryStart, { passive: true })
   );
 })();
