@@ -155,13 +155,15 @@ async function startAudio() {
     gain.gain.value = 0.85;
     gain.connect(audioCtx.destination);
 
-    // intro.webm plays once; at its scheduled end-time, loop.webm starts
+    // intro.wav plays once; at its scheduled end-time, loop.wav starts
     // looping forever. Both are scheduled on the AudioContext clock so the
-    // hand-off is sample-accurate (Opus/WebM has no encoder padding to clip
-    // the seam, unlike MP3).
+    // hand-off is sample-accurate. Raw WAV (uncompressed PCM) is used so
+    // there is ZERO encoder padding — Opus/MP3 both add silent samples at
+    // stream boundaries that decodeAudioData doesn't always strip, which
+    // creates an audible silence-blip at every loop iteration.
     const [introBuf, loopBuf] = await Promise.all([
-      decodeUrl("/assets/audio/intro.webm"),
-      decodeUrl("/assets/audio/loop.webm"),
+      decodeUrl("/assets/audio/intro.wav"),
+      decodeUrl("/assets/audio/loop.wav"),
     ]);
 
     const firstSrc = audioCtx.createBufferSource();
