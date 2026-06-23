@@ -157,6 +157,36 @@ html, body {
   opacity: 0.55;
 }
 
+/* Arcade-style attract prompt: static dog on canvas + blinking white pixel-art
+   text. Stays visible until the first user gesture (or browser-granted
+   autoplay) starts the visuals + audio together from t=0. Sits just below
+   where the dog renders (mascot.centerY = 30% of viewport, h ≈ 46% of min
+   dim) so the dog and the prompt read as one composition. */
+#attract {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 58%;
+  z-index: 6;
+  text-align: center;
+  pointer-events: none;
+  color: #ffffff;
+  font-family: "Press Start 2P", "JetBrains Mono", ui-monospace, monospace;
+  font-size: clamp(0.85rem, 2vw, 1.3rem);
+  letter-spacing: 0.1em;
+  /* No glow halo — arcade machines just blit white pixels onto a CRT. */
+  text-shadow: none;
+}
+#attract.hidden { display: none; }
+
+/* steps(2, end) gives a hard on/off square wave at ~1 Hz — same flicker rate
+   as a classic CADILLAC/INSERT-COIN attract loop. */
+@keyframes arcade-blink {
+  0%, 50%       { opacity: 1; }
+  50.01%, 100%  { opacity: 0; }
+}
+#attract { animation: arcade-blink 1.07s steps(2, end) infinite; }
+
 /* Respect motion preferences: skip the slam, beat-pulse, and glitch jitter.
    The canvas-side bob + ripples still play (they're tied to audio, not the
    slam). Reduced-motion users get a calm fade-in instead of a screen-shaker. */
@@ -168,4 +198,5 @@ html, body {
   }
   #headline::before,
   #headline::after { animation: none; }
+  #attract { animation: none; }
 }

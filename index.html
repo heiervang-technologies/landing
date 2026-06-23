@@ -8,7 +8,14 @@
   <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/press-start-2p-latin.woff2" crossorigin>
   <!-- Audio is fetched on click via JS; `as=audio` is unsupported in most
        browsers (emits warnings, no actual preload), so we don't list it. -->
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080012'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='monospace' font-size='20' fill='%23ff006e'%3E%E2%80%A2%3C/text%3E%3C/svg%3E">
+  <!-- Animated GIF first so Firefox (which honors animated favicons) picks it;
+       Chrome/Safari/Edge fall through to the static PNG sizes below. -->
+  <link rel="icon" type="image/gif" sizes="64x64" href="/assets/hei/favicon.gif">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/hei/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/hei/favicon-16.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/assets/hei/favicon-48.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/hei/apple-touch-icon.png">
+  <link rel="shortcut icon" href="/assets/hei/favicon.ico">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -18,6 +25,7 @@
     <div id="domain"></div>
     <div id="owner"></div>
   </section>
+  <div id="attract">ENTER 1 CLICK(S) TO PLAY</div>
   <script type="module" src="/main.js"></script>
 </body>
 </html>

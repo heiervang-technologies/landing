@@ -55,6 +55,14 @@ const overlay  = document.getElementById("overlay");
 const elHead   = document.getElementById("headline");
 const elDom    = document.getElementById("domain");
 const elOwner  = document.getElementById("owner");
+const attractEl = document.getElementById("attract");
+
+// Arcade attract gate. Until a user gesture (or browser-granted autoplay)
+// succeeds, the visual clock has NOT started — we render one static frame of
+// the mascot under the "ENTER 1 CLICK(S) TO PLAY" prompt, and the tick() rAF
+// loop is not kicked. When beginPlay() succeeds, audio + visuals both start
+// from t=0 atomically, so they stay aligned across the session.
+let visualsStarted = false;
 
 const cfg = configFor(location.hostname);
 if (cfg.title) document.title = cfg.title;
@@ -99,6 +107,9 @@ function resize() {
   // Also skips an interpolation pass per ripple paint, modest CPU/GPU win.
   ctx.imageSmoothingEnabled = false;
   if (mascotImg) layout();
+  // Attract is canvas-painted (not DOM) — a resize wipes the canvas, so
+  // re-blit the static frame until the user starts the show.
+  if (!visualsStarted && mascotImg) drawAttractFrame();
 }
 addEventListener("resize", () => { resize(); fitHeadline(); });
 
@@ -178,6 +189,40 @@ function layout() {
   mascot.bobAmp  = minDim * 0.073;          // 66% of previous 0.11
 }
 
+// ─── Animated favicon ────────────────────────────────────────────────────
+// Most browsers (Chrome/Safari/Edge) show only the FIRST frame of an animated
+// GIF favicon, so the static <link> in index.html only animates in Firefox.
+// To get motion everywhere we drive a small offscreen canvas from inside the
+// tick() loop and write its data URL back to a dedicated favicon <link>.
+// Throttled to ~8 Hz — toDataURL on a 64×64 canvas is sub-millisecond, and the
+// tab-strip repaint that follows is cheap (compositor, not main thread).
+const FAV_SIZE = 64;
+const FAV_HZ   = 8;
+let favCanvas = null, favCtx = null, favLink = null, favLastT = -1;
+function setupFavicon() {
+  favCanvas = document.createElement("canvas");
+  favCanvas.width = FAV_SIZE; favCanvas.height = FAV_SIZE;
+  favCtx = favCanvas.getContext("2d");
+  favCtx.imageSmoothingEnabled = false;   // crisp pixel-art downscale
+  favLink = document.createElement("link");
+  favLink.rel = "icon";
+  document.head.appendChild(favLink);     // appended last → takes precedence over the static GIF
+}
+function paintFavicon(t, pose, tilt) {
+  if (!favCtx || document.hidden) return;     // skip work for hidden tabs
+  if (t - favLastT < 1 / FAV_HZ) return;
+  favLastT = t;
+  favCtx.clearRect(0, 0, FAV_SIZE, FAV_SIZE);
+  // Bob amp scaled to 12% of the favicon side so the dog stays in frame at 64px.
+  const dy = Math.sin(bobPhase(t)) * (FAV_SIZE * 0.12);
+  favCtx.save();
+  favCtx.translate(FAV_SIZE / 2, FAV_SIZE / 2 + dy);
+  favCtx.rotate(tilt);
+  favCtx.drawImage(tintedDogs[pose][colorIdx], -FAV_SIZE / 2, -FAV_SIZE / 2, FAV_SIZE, FAV_SIZE);
+  favCtx.restore();
+  favLink.href = favCanvas.toDataURL("image/png");
+}
+
 async function preload() {
   // Per-site mascot override (see sites.js): hover.dog / hoverboard.dog ship
   // a hoverboarding variant with two alternating poses; everything else uses
@@ -226,15 +271,19 @@ async function prepareAudio() {
 // always strip, which creates an audible silence-blip at each loop wrap.
 async function startAudioAt(visualT) {
   if (audioStarted || !audioCtx || !introBuf || !loopBuf) return;
+  // Claim the flag SYNCHRONOUSLY before the await so a burst of clicks can't
+  // each pass the guard, each await resume(), and each spawn a fresh pair of
+  // BufferSources — every extra pair plays in parallel = stacked audio.
+  // If resume() ends up failing (autoplay still blocked), give the flag back.
+  audioStarted = true;
   // Browser autoplay policy: resume() is rejected (or no-op) without a user
-  // gesture. CRITICAL: don't set audioT0 / audioStarted until we confirm the
-  // context actually transitioned to "running" — otherwise tick() switches
-  // to a FROZEN audioCtx.currentTime and visuals lock up mid-animation.
+  // gesture. CRITICAL: don't set audioT0 until we confirm the context actually
+  // transitioned to "running" — otherwise tick() switches to a FROZEN
+  // audioCtx.currentTime and visuals lock up mid-animation.
   if (audioCtx.state === "suspended") {
     try { await audioCtx.resume(); } catch (_) {}
-    if (audioCtx.state !== "running") return;
+    if (audioCtx.state !== "running") { audioStarted = false; return; }
   }
-  audioStarted = true;
 
   const startAt = audioCtx.currentTime + 0.02;
   // audioT0 is the audioCtx time that corresponds to visual t=0.
@@ -444,7 +493,25 @@ function tick(nowMs) {
   // the edge-on frame.
   drawSilhouette(tintedDogs[pose][colorIdx], dogX, dogY, dims.w, dims.h, tilt, flipScaleX);
 
+  paintFavicon(t, pose, tilt);
+
   requestAnimationFrame(tick);
+}
+
+// Arcade attract frame: a single static blit of the mascot. No bob, no tilt,
+// no flip — the dog stands still under the blinking prompt. The pose mirrors
+// what currentPose(0) would pick for the live show's first frame (pose 1
+// "hype" for hover.dog, pose 0 otherwise), so click-to-play has zero visual
+// jump. Palette index 0 (magenta) matches colorIdx at t=0.
+function drawAttractFrame() {
+  if (!mascotImg) return;
+  ctx.fillStyle = "#080012";
+  ctx.fillRect(0, 0, innerWidth, innerHeight);
+  const pose = currentPose(0);
+  const dims = poseDims[pose];
+  const dogX = mascot.centerX - dims.w / 2;
+  const dogY = mascot.centerY - dims.h / 2;
+  drawSilhouette(tintedDogs[pose][0], dogX, dogY, dims.w, dims.h, 0, 1);
 }
 
 function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha) {
@@ -457,31 +524,44 @@ function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha) {
   ctx.restore();
 }
 
-// Boot: as soon as the image+audio assets are ready, start the visuals.
-// Audio can't actually play until the user gives the page a gesture (browser
-// autoplay policy), so it stays pre-decoded and dormant until the first
-// pointerdown/keydown anywhere on the page. That gesture wires audio in with
-// an offset that matches the visual clock — no resync jump, no UI prompt.
+// Boot: arcade attract → click → play. After preload we paint ONE static
+// frame and show the "ENTER 1 CLICK(S) TO PLAY" prompt. Audio decode races in
+// parallel. The visual clock (startMs) and the rAF loop don't start until
+// beginPlay() confirms the AudioContext actually transitioned to "running" —
+// so audio and visuals start from t=0 atomically with no drift.
+//
+// Browser autoplay policy: AudioContext.resume() only takes effect inside a
+// user gesture (or with enough Media Engagement Index on repeat visits). The
+// optimistic beginPlay() below covers the MEI case (returning visitors fly
+// past attract with no click); the gesture listeners cover everyone else.
 (async function boot() {
-  // Visuals only need the mascot image — start them the instant it loads.
-  // Audio decode runs in parallel and joins later via the gesture handler
-  // (or autoplay if granted) without blocking the first frame.
   await preload();
-  startMs = performance.now();
-  requestAnimationFrame(tick);
+  setupFavicon();
+  drawAttractFrame();
   const audioReady = prepareAudio();
-  const tryStart = async () => {
+
+  const beginPlay = async () => {
+    if (visualsStarted) return;
     await audioReady;
-    if (audioStarted) return;
-    const visualT = (performance.now() - startMs) / 1000;
-    await startAudioAt(Math.max(0, visualT));
+    if (visualsStarted) return;
+    await startAudioAt(0);
+    // startAudioAt flips audioStarted back to false when autoplay is blocked,
+    // so this gate distinguishes "audio is actually running" from "browser
+    // said no, wait for the next gesture".
+    if (!audioStarted) return;
+    // Re-check AFTER the await — multiple concurrent beginPlay() callers can
+    // all pass the earlier visualsStarted guards and all reach startAudioAt
+    // (itself race-safe). The first one through here claims the rAF kick;
+    // the rest must short-circuit or we'd run tick() twice per frame.
+    if (visualsStarted) return;
+    visualsStarted = true;
+    attractEl?.classList.add("hidden");
+    startMs = performance.now();
+    requestAnimationFrame(tick);
   };
-  // Optimistic autoplay (browser may or may not grant it).
-  tryStart();
-  // Every user gesture re-attempts. startAudioAt is idempotent (early-exits
-  // if already started, or if the context is still suspended after resume),
-  // so leaving the listeners attached is safe and self-clearing in effect.
+
+  beginPlay();
   ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
-    addEventListener(ev, tryStart, { passive: true })
+    addEventListener(ev, beginPlay, { passive: true })
   );
 })();
