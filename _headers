@@ -1,0 +1,15 @@
+# Code: short cache so deploys propagate quickly.
+/*.js
+  Cache-Control: public, max-age=300, must-revalidate
+/*.css
+  Cache-Control: public, max-age=300, must-revalidate
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Big binaries: cache long; we change the filename when content changes.
+/assets/audio/*
+  Cache-Control: public, max-age=2592000, immutable
+/assets/fonts/*
+  Cache-Control: public, max-age=2592000, immutable
+/assets/hei/*
+  Cache-Control: public, max-age=2592000, immutable
