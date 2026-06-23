@@ -28,6 +28,8 @@ export const SITES = {
   "cssus.live":               T("cssus.live"),
   "heiervang.com":            T("heiervang.com"),
   "heiervang.tech":           T("heiervang.tech"),
+  "hover.dog":                T("hover.dog"),
+  "hoverboard.dog":           T("hoverboard.dog"),
   "hyperpla.net":             T("hyperpla.net"),
   "marku.sh":                 T("marku.sh"),
   "markus.consulting":        T("markus.consulting"),
