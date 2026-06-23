@@ -2,15 +2,15 @@
 // Every domain serves the same animated frontend; only `title` / `headline` /
 // `domain` / `owner` text varies. Customize per-domain copy here.
 //
-// Defaults: headline = domain (so the slam-in animation has something to land
-// on), domain = "" (we hide the redundant second line on templated domains —
-// keep the original retard.mx entry as the reference for fully-customized copy).
+// Templated default: the uppercased hostname is the entire slam — one line,
+// NAME.TLD together. retard.mx is the reference for a fully-bespoke entry
+// (separate headline catchphrase + domain sub-line).
 
 const OWNER = "is property of marksverdhei";
 
-const T = (host, headline = host) => ({
+const T = (host, headline) => ({
   title: host,
-  headline,
+  headline: headline ?? host.toUpperCase(),
   domain: "",
   owner: OWNER,
 });
@@ -57,13 +57,22 @@ export const SITES = {
 const DEV_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", ""]);
 
 export function configFor(hostname) {
+  const isDev = DEV_HOSTS.has(hostname) ||
+                hostname.endsWith(".pages.dev") ||
+                hostname.endsWith(".github.io");
+  // Dev affordance: ?host=foo.bar previews that domain's templated copy without
+  // needing DNS. Only honored in dev contexts so a malicious link to a prod
+  // domain can't reshape the page.
+  if (isDev && typeof location !== "undefined") {
+    const override = new URLSearchParams(location.search).get("host");
+    if (override) {
+      if (SITES[override]) return SITES[override];
+      return T(override);
+    }
+  }
   const bare = hostname.replace(/^www\./, "");
   if (SITES[hostname]) return SITES[hostname];
   if (SITES[bare])     return SITES[bare];
-  if (DEV_HOSTS.has(hostname) ||
-      hostname.endsWith(".pages.dev") ||
-      hostname.endsWith(".github.io")) {
-    return SITES["retard.mx"];
-  }
+  if (isDev) return SITES["retard.mx"];
   return {};
 }

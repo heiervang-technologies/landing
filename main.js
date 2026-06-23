@@ -1,9 +1,10 @@
 import { configFor } from "/sites.js";
 
-// Hoverboard is 111.78 BPM (aubio tempo). Everything is scripted off that —
-// no live audio analysis. Audio plays alongside; the visuals stay in sync
-// because the timing is hardcoded.
-const BPM         = 111.78;
+// Track BPM derived from the loop file: loop.webm is 45.96s and contains
+// 86 beats → 86 * 60 / 45.96 ≈ 112.27 BPM. Visuals are scripted off this —
+// no live audio analysis. Audio plays alongside; timing stays locked because
+// the loop is a perfect integer-beat repeat.
+const BPM         = 112.27;
 const BEAT_S      = 60 / BPM;            // ~0.537 s
 const COLOR_S     = BEAT_S / 2;          // 8th-note color advance — also the ripple emit rate
 
@@ -56,6 +57,28 @@ if (cfg.headline) { elHead.textContent = cfg.headline; elHead.dataset.text = cfg
 if (cfg.domain)   elDom.textContent   = cfg.domain;
 if (cfg.owner)    elOwner.textContent = cfg.owner;
 
+// Length-aware fit. The headline is `white-space: nowrap`, so the CSS clamp
+// only bounds font-size — long hostnames (opensourcefriendly.dev) overflow
+// horizontally. Shrink until it fits ~92% of the viewport.
+function fitHeadline() {
+  if (!cfg.headline) return;
+  elHead.style.fontSize = "";
+  const max = innerWidth * 0.92;
+  let size = parseFloat(getComputedStyle(elHead).fontSize);
+  while (elHead.scrollWidth > max && size > 24) {
+    size *= 0.93;
+    elHead.style.fontSize = size + "px";
+  }
+}
+// Force-load the Bungee face up-front; otherwise `font-display: block` keeps
+// the headline invisible (scrollWidth=0) until the slam drop, and fitHeadline
+// would never measure correctly during the intro. Once the face is in, fit.
+if (document.fonts?.load) {
+  document.fonts.load("400 10rem Bungee").then(fitHeadline, fitHeadline);
+} else {
+  fitHeadline();
+}
+
 let dpr = 1;
 function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -66,7 +89,7 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (mascotImg) layout();
 }
-addEventListener("resize", resize);
+addEventListener("resize", () => { resize(); fitHeadline(); });
 
 function loadImage(src) {
   return new Promise((res, rej) => {
@@ -119,6 +142,7 @@ async function preload() {
 }
 
 let audioCtx;
+let audioT0 = null;     // audioCtx.currentTime captured when the intro started
 async function decodeUrl(url) {
   const res = await fetch(url);
   const buf = await res.arrayBuffer();
@@ -131,27 +155,30 @@ async function startAudio() {
     gain.gain.value = 0.85;
     gain.connect(audioCtx.destination);
 
-    // First listen: hoverboard.mp3 — full song including the ending tone.
-    // On its scheduled end-time, hoverloop.mp3 starts looping forever; the
-    // hand-off is sample-accurate because we schedule both via the AudioContext
-    // clock rather than waiting on the `ended` event.
-    const [hoverboardBuf, hoverloopBuf] = await Promise.all([
-      decodeUrl("/assets/audio/hoverboard.mp3"),
-      decodeUrl("/assets/audio/hoverloop.mp3"),
+    // intro.webm plays once; at its scheduled end-time, loop.webm starts
+    // looping forever. Both are scheduled on the AudioContext clock so the
+    // hand-off is sample-accurate (Opus/WebM has no encoder padding to clip
+    // the seam, unlike MP3).
+    const [introBuf, loopBuf] = await Promise.all([
+      decodeUrl("/assets/audio/intro.webm"),
+      decodeUrl("/assets/audio/loop.webm"),
     ]);
 
     const firstSrc = audioCtx.createBufferSource();
-    firstSrc.buffer = hoverboardBuf;
+    firstSrc.buffer = introBuf;
     firstSrc.connect(gain);
 
     const loopSrc = audioCtx.createBufferSource();
-    loopSrc.buffer = hoverloopBuf;
+    loopSrc.buffer = loopBuf;
     loopSrc.loop = true;
     loopSrc.connect(gain);
 
     const startAt = audioCtx.currentTime + 0.02;
     firstSrc.start(startAt);
-    loopSrc.start(startAt + hoverboardBuf.duration);
+    loopSrc.start(startAt + introBuf.duration);
+    // Lock visual time to the audio clock so they can never drift apart.
+    // tick() reads audioT0 below; until it's set, rAF time is used.
+    audioT0 = startAt;
   } catch (_) {
     // Audio is non-essential to the visual. Swallow failures (e.g. headless).
   }
@@ -197,7 +224,12 @@ function inSpiral(t) { return t >= SPIRAL_START && t < SPIRAL_END; }
 
 function tick(nowMs) {
   if (startMs === 0) startMs = nowMs;
-  const t = (nowMs - startMs) / 1000;
+  // Once audio is running, derive t from the AudioContext clock so visuals
+  // and audio can't drift across long sessions. Pre-audio (or if audio
+  // failed), fall back to the rAF clock — same numbers, no jump.
+  const t = (audioCtx && audioT0 !== null)
+    ? audioCtx.currentTime - audioT0
+    : (nowMs - startMs) / 1000;
 
   // bob + tilt — dog stays at center X, only oscillates vertically.
   const phase = bobPhase(t);
@@ -291,7 +323,6 @@ preload();
 
 enterBtn.addEventListener("click", async () => {
   enterBtn.hidden = true;
-  overlay.hidden = false;
   if (!mascotImg) await preload();
   startAudio(); // fire and forget
   requestAnimationFrame(tick);

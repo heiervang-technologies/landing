@@ -77,8 +77,6 @@ html, body {
   opacity: 0;            /* hidden during intro; the drop adds .dropped */
 }
 
-#overlay[hidden] { display: none; }
-
 #overlay.dropped { opacity: 1; }
 #overlay.dropped #headline { animation: slam 0.36s cubic-bezier(0.18,1.4,0.36,1) 1, beat-pulse 0.5371s cubic-bezier(.2,.85,.4,1) 0.36s infinite; }
 #overlay.dropped #domain   { animation: fade-up 0.5s 0.2s cubic-bezier(.2,.6,.3,1) backwards; }
@@ -174,4 +172,18 @@ html, body {
   letter-spacing: 0.3em;
   text-transform: uppercase;
   opacity: 0.55;
+}
+
+/* Respect motion preferences: skip the slam, beat-pulse, and glitch jitter.
+   The canvas-side bob + ripples still play (they're tied to audio, not the
+   slam). Reduced-motion users get a calm fade-in instead of a screen-shaker. */
+@media (prefers-reduced-motion: reduce) {
+  #overlay.dropped #headline,
+  #overlay.dropped #domain,
+  #overlay.dropped #owner {
+    animation: fade-up 0.4s ease-out backwards;
+  }
+  #headline::before,
+  #headline::after { animation: none; }
+  #enter span { animation: none; opacity: 1; }
 }
