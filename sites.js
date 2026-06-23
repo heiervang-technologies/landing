@@ -25,7 +25,16 @@ export const SITES = {
   },
 
   // Templated — same frontend, per-domain text.
+  "clanker.cam":              T("clanker.cam"),
+  "clanker.foundation":       T("clanker.foundation"),
+  "clanker.productions":      T("clanker.productions"),
+  "clanker.surf":             T("clanker.surf"),
+  "clanker.wiki":             T("clanker.wiki"),
   "cssus.live":               T("cssus.live"),
+  "hei.ceo":                  T("hei.ceo"),
+  "hei.codes":                T("hei.codes"),
+  "hei.expert":               T("hei.expert"),
+  "hei.tools":                T("hei.tools"),
   "heiervang.com":            T("heiervang.com"),
   "heiervang.tech":           T("heiervang.tech"),
   "hover.dog":                T("hover.dog"),
