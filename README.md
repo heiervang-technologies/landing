@@ -9,33 +9,65 @@ and pointing its DNS at this Cloudflare Pages project.
 ## Stack
 
 - Plain HTML / CSS / ES modules — no build step.
-- Audio via Web Audio API. Foreground PNG drifts on a `<canvas>` with a
-  beat-locked color trail. Beats are detected live from the low-frequency band
-  of whichever track plays, so the timing adapts to any audio.
-- Hosted on Cloudflare Pages, deployed from this private GitHub repo on every
-  push to `main`.
+- Audio via Web Audio API: a one-shot `intro.wav` flows into a seamless
+  `loop.wav`. The hei PNG drifts on a `<canvas>` with a beat-locked color
+  trail; beats are derived from the loop's known tempo, so the slam lands on
+  time without runtime FFT analysis.
+- Pixel-art slam typography (Press Start 2P) with glitch + chromatic
+  aberration layered via `::before` / `::after` on the headline.
+- Hosted on Cloudflare Pages (`heiervang-landing`). Currently deployed via
+  `wrangler pages deploy` direct upload; git push is also wired but not the
+  active path.
 
 ## Layout
 
 ```
 index.html
 style.css
-main.js               # render loop, audio + beat detection
-sites.js              # hostname → { title, blurb }
-CNAME                 # primary custom domain (informational only on CF Pages)
+main.js                    # render loop, audio playback, beat-locked color
+sites.js                   # hostname → { title, headline, domain, owner }
+_headers                   # CF Pages per-path cache policy
+CNAME                      # informational on CF Pages
 assets/
-  audio/hoverboard.mp3
-  hei/hei_mask_*.png  # 8 color variants of the hei mascot
+  audio/intro.wav          # boot hit
+  audio/loop.wav           # seamless body loop
+  fonts/press-start-2p-latin.woff2
+  hei/hei_mask_original.png  # base mascot; runtime recolors via canvas
+  hei/hei_hoverboard*.png    # hoverboard variants
+  hei/favicon{.gif,.ico,-16,-32,-48,-64.png}
+  hei/apple-touch-icon.png
 ```
 
 ## Adding a domain
 
-1. Add an entry to `SITES` in `sites.js`:
-   ```js
-   "example.com": { title: "example", blurb: "what this domain is for" },
-   ```
-2. In the Cloudflare Pages project, add `example.com` as a Custom Domain.
-3. Cloudflare provisions the TLS cert. Done.
+For a templated entry (uppercased hostname as the slam):
+
+```js
+"example.com": T("example.com"),
+```
+
+For a bespoke headline:
+
+```js
+"example.com": T("example.com", "CATCHPHRASE"),
+```
+
+For full control (separate title / headline / domain sub-line), see the
+`retard.mx` reference entry in `sites.js`.
+
+Then attach the domain to the `heiervang-landing` Pages project (creates
+the CF zone if needed; flip Namecheap NS to Cloudflare; CF provisions TLS).
+
+## Dev affordance
+
+In dev contexts (localhost, `*.pages.dev`, `*.github.io`) you can preview
+any domain's templated copy without DNS:
+
+```
+http://localhost:8000/?host=example.com
+```
+
+Only honored in dev — production hostnames can't be reshaped via query string.
 
 ## Local preview
 
