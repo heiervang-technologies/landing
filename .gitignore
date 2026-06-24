@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 *.log
 .wrangler/
+_preview/
+# Source WAV for bombo.opus — kept locally for re-encodes, not shipped.
+assets/audio/bombo.wav

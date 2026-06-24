@@ -26,6 +26,14 @@
     <div id="owner"></div>
   </section>
   <div id="attract">ENTER 1 CLICK(S) TO PLAY</div>
-  <script type="module" src="/main.js"></script>
+  <!-- Dispatcher: most domains run the mascot renderer (main.js); bespoke
+       per-domain renderers are picked here by cfg.mode. Keeping the resolution
+       in one place means the static HTML stays single-file across all hosts. -->
+  <script type="module">
+    import { configFor } from "/sites.js";
+    const cfg = configFor(location.hostname);
+    const entry = cfg.mode === "bomboc" ? "/bomboc.js" : "/main.js";
+    import(entry);
+  </script>
 </body>
 </html>

@@ -15,6 +15,20 @@ const T = (host, headline) => ({
   owner: OWNER,
 });
 
+// Shared sprite pool for hover.dog / hoverboard.dog. main.js cycles through
+// `mascots` on each pose-flip boundary. All entries here are native-RIGHT;
+// `flipMascots: true` on the site config mirrors them at render so the dog
+// faces LEFT on screen (matching the rightward-drifting ripple trail).
+// hover_hover3m is the pre-mirrored variant of hover3 (the only native-left
+// original in the set, flipped horizontally so it lines up with the rest).
+const HOVER_DOG_MASCOTS = [
+  // hover_hover4 is index 0 — it's the intro sprite shown for the full
+  // single-sprite stretch before the 1/1 cycle kicks in.
+  "hover_hover4", "hover_c854", "hover_c857", "hover_falling",
+  "hover_haiv3", "hover_heihover", "hover_hover2", "hover_hover3m",
+  "hover_dog-kickflip",
+].map((s) => `/assets/hei/${s}.png`);
+
 export const SITES = {
   // Fully-customized: the original.
   "retard.mx": {
@@ -37,15 +51,19 @@ export const SITES = {
   "hei.tools":                T("hei.tools"),
   "heiervang.com":            T("heiervang.com"),
   "heiervang.tech":           T("heiervang.tech"),
-  // hover.dog / hoverboard.dog: the mascot rides a hoverboard. Two poses
-  // alternate via a 2D rotation flip:
-  //   - "ride"  = left-facing cruise              (hei_hoverboard.png)
-  //   - "tre"   = arms-wide hype, right-facing    (hei_hoverboard_right.png)
-  // Pose schedule (main.js drives the flips): "tre" during the intro hype,
-  // "ride" through the drop, "tre" during the spiral segment, "ride" after.
-  "hover.dog":                { ...T("hover.dog"),      mascot: "/assets/hei/hei_hoverboard.png", mascotAlt: "/assets/hei/hei_hoverboard_right.png" },
-  "hoverboard.dog":           { ...T("hoverboard.dog"), mascot: "/assets/hei/hei_hoverboard.png", mascotAlt: "/assets/hei/hei_hoverboard_right.png" },
+  // hover.dog / hoverboard.dog: hoverboarding mascot, cycling through a 9-pose
+  // pool on a beat-grid cadence that shifts across the song (see main.js
+  // currentPose/flipCount — 1/4 → 1/1 → 1/2). Sprites face right as shipped
+  // by the sprite-prep pipeline; the 1/1 segment alternates horizontal mirror
+  // on each flip so they swap facing every bar.
+  "hover.dog":                { ...T("hover.dog"),      mascots: HOVER_DOG_MASCOTS, flipMascots: true },
+  "hoverboard.dog":           { ...T("hoverboard.dog"), mascots: HOVER_DOG_MASCOTS, flipMascots: true },
   "hyperpla.net":             T("hyperpla.net"),
+  // bomboc.lat: bespoke beat-reactive page — fullscreen bomboclat image that
+  // pulses on the 110.41 BPM of bombo.wav, with fire-particle flames rising
+  // from below. The dispatcher in index.html routes mode:"bomboc" to bomboc.js
+  // instead of main.js — different renderer, different audio, no mascot pool.
+  "bomboc.lat":               { ...T("bomboc.lat"), mode: "bomboc" },
   "marku.sh":                 T("marku.sh"),
   "markus.consulting":        T("markus.consulting"),
   "markus.sh":                T("markus.sh"),

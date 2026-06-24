@@ -39,6 +39,26 @@ const RIPPLE_END   = 2.8;                // steady-state scale multiplier at end
 const SPIRAL_START   = 42.0;
 const SPIRAL_END     = 50.0;
 const SPIRAL_END_SCALE = 1 + 2 * (RIPPLE_END - 1);  // grows 2× the size delta — ≈ 4.6
+// Pace-up segment: the sprite flips on every BEAT (1/4 cadence) instead of
+// every bar — a build-up that escalates the cycle before the main groove
+// returns to 1/1. Bounded by the "pace-up" musical segment.
+const PACE_UP_START  = 24.0;
+const PACE_UP_END    = 32.0;
+// Outro & spiral-2 bounds. Markus's PLACEHOLDER values pending a listen pass —
+// outro = the calm stretch between the two spirals; spiral-2 = the second
+// spiral in the outro region. Both spirals hold the sprite fixed; only the
+// outro flips (every HALF / 2 beats).
+const OUTRO_START    = 50.0;   // PLACEHOLDER
+const OUTRO_END      = 62.0;   // PLACEHOLDER
+const SPIRAL2_START  = 62.0;   // PLACEHOLDER
+const SPIRAL2_END    = 70.0;   // PLACEHOLDER
+// Audio file durations (used by the flip-schedule loop-wrap math — the audio
+// itself reads them off the decoded buffers at runtime). intro.wav plays once,
+// then loop.wav loops forever. The post-intro flip pattern repeats every
+// LOOP_DUR seconds, shifted into the future, so the cadence keeps phase with
+// the audio across every wrap.
+const INTRO_AUDIO_DUR = 39.98;
+const LOOP_AUDIO_DUR  = 31.02;
 
 const PALETTE = [
   "#ff006e", // hot magenta
@@ -208,7 +228,7 @@ function setupFavicon() {
   favLink.rel = "icon";
   document.head.appendChild(favLink);     // appended last → takes precedence over the static GIF
 }
-function paintFavicon(t, pose, tilt) {
+function paintFavicon(t, pose, tilt, sx, sy) {
   if (!favCtx || document.hidden) return;     // skip work for hidden tabs
   if (t - favLastT < 1 / FAV_HZ) return;
   favLastT = t;
@@ -217,6 +237,11 @@ function paintFavicon(t, pose, tilt) {
   const dy = Math.sin(bobPhase(t)) * (FAV_SIZE * 0.12);
   favCtx.save();
   favCtx.translate(FAV_SIZE / 2, FAV_SIZE / 2 + dy);
+  // Use Math.sign so the favicon shows the facing/upside-down state without
+  // chasing the squash animation — at 64px on an 8 Hz sample rate, a partial
+  // squash would just blur, not read.
+  const fsx = Math.sign(sx) || 1, fsy = Math.sign(sy) || 1;
+  if (fsx !== 1 || fsy !== 1) favCtx.scale(fsx, fsy);
   favCtx.rotate(tilt);
   favCtx.drawImage(tintedDogs[pose][colorIdx], -FAV_SIZE / 2, -FAV_SIZE / 2, FAV_SIZE, FAV_SIZE);
   favCtx.restore();
@@ -225,11 +250,26 @@ function paintFavicon(t, pose, tilt) {
 
 async function preload() {
   // Per-site mascot override (see sites.js): hover.dog / hoverboard.dog ship
-  // a hoverboarding variant with two alternating poses; everything else uses
-  // a single mascot. When `cfg.mascotAlt` is set, the two poses are toggled
-  // via a 2π rotation flip on intro / spiral boundaries (see currentPose()).
-  const srcA = cfg.mascot    || "/assets/hei/hei_mask_original.png";
-  const srcs = cfg.mascotAlt ? [srcA, cfg.mascotAlt] : [srcA];
+  // a pool of hoverboarding poses (`cfg.mascots`); everything else uses a
+  // single mascot. Pool sites cycle through poses on each FLIP_TIMES boundary
+  // (see currentPose()). `cfg.mascot` + optional `cfg.mascotAlt` is the legacy
+  // 1- or 2-mascot path for everything else.
+  let srcs;
+  if (Array.isArray(cfg.mascots) && cfg.mascots.length > 0) {
+    srcs = [...cfg.mascots];
+    // ?entry=<slug> rotates the pool so the named sprite is at index 0
+    // (= the intro hold sprite). Match against the filename, so `?entry=hover4`
+    // finds `/assets/hei/hover_hover4.png`. Useful for A/B-testing the opener
+    // without code edits.
+    const entry = new URLSearchParams(location.search).get("entry");
+    if (entry) {
+      const idx = srcs.findIndex((s) => s.includes(`hover_${entry}.png`));
+      if (idx > 0) srcs.unshift(srcs.splice(idx, 1)[0]);
+    }
+  } else {
+    const srcA = cfg.mascot || "/assets/hei/hei_mask_original.png";
+    srcs = cfg.mascotAlt ? [srcA, cfg.mascotAlt] : [srcA];
+  }
   mascotImgs  = await Promise.all(srcs.map(loadImage));
   mascotImg   = mascotImgs[0];
   silhouettes = mascotImgs.map((img) => PALETTE.map((c) => bakeSilhouette(img, c)));
@@ -328,15 +368,17 @@ let lastBounce = -1;
 let colorIdx = 0;
 let dropped = false;          // toggles true on the first tick past INTRO_END_S
 
-function drawSilhouette(img, x, y, w, h, tilt, scaleX = 1) {
+function drawSilhouette(img, x, y, w, h, tilt, scaleX = 1, scaleY = 1) {
   ctx.save();
   ctx.translate(x + w / 2, y + h / 2);
   // Paper-Mario card flip: horizontal squash applied in SCREEN space (before
   // the tilt rotation) so the squash axis stays vertical regardless of the
   // bob tilt — sprite reads as a 2D card pivoting on its vertical center.
-  if (scaleX !== 1) ctx.scale(scaleX, 1);
+  // scaleY is the per-flip orientation (1 or -1 for upside-down in the 1/1
+  // segment) — applied alongside scaleX so vertical mirror also lives in
+  // screen space, NOT in the post-tilt local frame.
+  if (scaleX !== 1 || scaleY !== 1) ctx.scale(scaleX, scaleY);
   ctx.rotate(tilt);
-  // Always left-facing (no flip); PNG is natively left-facing.
   ctx.drawImage(img, -w / 2, -h / 2, w, h);
   ctx.restore();
 }
@@ -364,31 +406,132 @@ function emitStep(t) {
 
 function inSpiral(t) { return t >= SPIRAL_START && t < SPIRAL_END; }
 
-// ─── Pose schedule (hover.dog / hoverboard.dog only) ─────────────────────
-// Pose 1 = arms-wide "hype" frame. Pose 0 = the cruise frame. The schedule
-// flips on three boundaries: drop (intro → cruise), spiral start (cruise →
-// hype), spiral end (hype → cruise). For single-pose sites the function is
-// a no-op (poseCount=1 → result clamped to 0).
-const FLIP_DUR     = 0.36;   // matches the slam keyframe duration
-const FLIP_TIMES   = [INTRO_END_S, SPIRAL_START, SPIRAL_END];
-function currentPose(t) {
-  if (mascotImgs.length < 2) return 0;
-  // Pose 1 during the intro hype AND during the spiral; pose 0 otherwise.
-  if (t < INTRO_END_S) return 1;
-  if (t >= SPIRAL_START && t < SPIRAL_END) return 1;
-  return 0;
+// ─── Pose schedule ────────────────────────────────────────────────────────
+// Pool sites cycle through `mascotImgs` on a beat-grid cadence that shifts
+// across the song:
+//   [0, INTRO_END_S)                — ONE sprite (pose 0), no flips — the
+//                                     intro hold. Cycle starts AT the crash.
+//   [INTRO_END_S, PACE_UP_START)    — every 1/1 (every bar = 4 beats) —
+//                                     "first" segment, slow cruise.
+//   [PACE_UP_START, PACE_UP_END)    — every 1/4 (every beat) — pace-up.
+//   [PACE_UP_END, SPIRAL_START)     — every 1/1 — "main" segment.
+//   [SPIRAL_START, SPIRAL_END)      — NO flips — spiral #1; sprite holds while
+//                                     the visual spiral takes the show.
+//   [OUTRO_START, OUTRO_END)        — every 1/2 (half-note = 2 beats) — outro
+//                                     comedown between the two spirals.
+//   [SPIRAL2_START, SPIRAL2_END)    — NO flips — spiral #2; same hold logic.
+//   In the 1/1 regimes the per-flip transform alternates horizontal mirror +
+//   every 8th flip lands upside-down. The 1/4 pace-up + 1/2 outro keep the
+//   same r2i counter advancing so the alternation pattern stays continuous.
+//   After loop.wav wraps (at t = INTRO_AUDIO_DUR + LOOP_AUDIO_DUR), the post-
+//   intro slice of this pattern is replayed for each subsequent loop iteration
+//   so the cadence stays locked to the audio.
+// Flip events are aligned to the global beat-multiple grid (not relative to
+// the regime boundary), so the audio loop's integer-bar wrap keeps the visual
+// flips on the same musical phase forever.
+const FLIP_DUR         = 0.36;   // matches the slam keyframe duration
+const FLIP_HORIZON     = 600;    // s — precompute out to 10 min; visual t past
+                                 // that just freezes on the last pose (no one
+                                 // stares at a landing page for 10 minutes).
+// Per-flip orientation transform applied to the sprite emitted after that
+// flip. The 1/1 segment alternates horizontal mirror on each flip, and every
+// 8th flip ALSO vertical-mirrors so the dog lands upside-down — a one-bar
+// gimmick that resets when the 8-cycle wraps. The 1/2 segment is identity
+// (no per-flip transforms).
+const { FLIP_TIMES, FLIP_TRANSFORMS } = (() => {
+  const base = { times: [], transforms: [] };
+  const push = (t, tr) => { base.times.push(t); base.transforms.push(tr); };
+  const BAR  = 4 * BEAT_S;
+  const HALF = 2 * BEAT_S;
+  // Intro hold: NO flips between t=0 and INTRO_END_S — pose 0 (the entry
+  // sprite) holds. First flip lands AT the crash, so the sprite switches on
+  // the drop just like the original 2-pose system did.
+  let r2i = 0;
+  const flipTr = () => {
+    const r2pos = r2i++ % 8;
+    return { sx: r2pos % 2 === 1 ? -1 : 1, sy: r2pos === 7 ? -1 : 1 };
+  };
+  const near = (a, b) => Math.abs(a - b) < FLIP_DUR;
+  push(INTRO_END_S, { sx: 1, sy: 1 });
+  r2i++;
+  // "first" cruise: bar-aligned flips up to the pace-up boundary.
+  for (let b = (Math.floor(INTRO_END_S / BAR) + 1) * BAR; b < PACE_UP_START; b += BAR) {
+    if (near(b, INTRO_END_S)) continue;
+    push(b, flipTr());
+  }
+  // Pace-up: every-beat flips through the build segment.
+  for (let b = (Math.floor(PACE_UP_START / BEAT_S) + 1) * BEAT_S; b < PACE_UP_END; b += BEAT_S) {
+    push(b, flipTr());
+  }
+  // "main" cruise: back to bar-aligned flips through to the spiral.
+  for (let b = (Math.floor(PACE_UP_END / BAR) + 1) * BAR; b < SPIRAL_START; b += BAR) {
+    push(b, flipTr());
+  }
+  // [SPIRAL_START, SPIRAL_END): NO flips — sprite holds through spiral #1.
+  // Outro: half-note flips between the two spirals.
+  for (let b = (Math.floor(OUTRO_START / HALF) + 1) * HALF; b < OUTRO_END; b += HALF) {
+    push(b, flipTr());
+  }
+  // [SPIRAL2_START, SPIRAL2_END): NO flips — sprite holds through spiral #2.
+  // ── Loop wrap: replay the post-intro pattern shifted by k * LOOP_AUDIO_DUR
+  // for each subsequent audio loop iteration. The audio re-plays loop.wav
+  // forever starting at INTRO_AUDIO_DUR; we mirror that by re-emitting the
+  // flips that fell in [INTRO_AUDIO_DUR, INTRO_AUDIO_DUR + LOOP_AUDIO_DUR)
+  // shifted into the future.
+  const times = base.times.slice();
+  const transforms = base.transforms.slice();
+  const loopStartIdx = base.times.findIndex((t) => t >= INTRO_AUDIO_DUR);
+  if (loopStartIdx >= 0) {
+    const loopTimes      = base.times.slice(loopStartIdx);
+    const loopTransforms = base.transforms.slice(loopStartIdx);
+    for (let k = 1; k * LOOP_AUDIO_DUR < FLIP_HORIZON; k++) {
+      for (let i = 0; i < loopTimes.length; i++) {
+        const t = loopTimes[i] + k * LOOP_AUDIO_DUR;
+        if (t >= FLIP_HORIZON) break;
+        times.push(t);
+        transforms.push(loopTransforms[i]);
+      }
+    }
+  }
+  return { FLIP_TIMES: times, FLIP_TRANSFORMS: transforms };
+})();
+const IDENTITY_TR = { sx: 1, sy: 1 };
+function flipIdx(t) {
+  let i = 0;
+  for (const ft of FLIP_TIMES) { if (t >= ft) i++; else break; }
+  return i;
 }
-// Centered on each FLIP_TIME so the swap happens AT the beat boundary, with
-// half the rotation playing before and half after. Returns null outside any
+function currentPose(t) {
+  const n = mascotImgs.length;
+  if (n < 2) return 0;
+  // Index advances by one on each crossed flip time; pose 0 is the t=0 frame.
+  return flipIdx(t) % n;
+}
+function poseTransform(t) {
+  const i = flipIdx(t);
+  if (i === 0) return IDENTITY_TR;
+  return FLIP_TRANSFORMS[i - 1] || IDENTITY_TR;
+}
+// Centered on each flip event so the swap happens AT the grid boundary, with
+// half the squash playing before and half after. Returns null outside any
 // flip window (live dog drawn untilted by the flip — the bob tilt still runs).
+// At fast cadences the squash window may abut the next event but never overlaps
+// it: FLIP_DUR (0.36s) < BEAT_S (~0.54s) holds.
 function flipProgress(t) {
   if (mascotImgs.length < 2) return null;
   for (const ft of FLIP_TIMES) {
+    if (ft > t + FLIP_DUR) break;
     const s = ft - FLIP_DUR / 2, e = ft + FLIP_DUR / 2;
     if (t >= s && t < e) return (t - s) / FLIP_DUR;
   }
   return null;
 }
+
+// Per-site rendering flag: when cfg.flipMascots is true (hover.dog /
+// hoverboard.dog), the rendered sprite is mirrored horizontally — the source
+// PNGs face right; flipping makes the dog face LEFT, the same direction the
+// trail visually implies it's moving.
+const MASCOT_FACE_X = cfg.flipMascots ? -1 : 1;
 
 function tick(nowMs) {
   if (startMs === 0) startMs = nowMs;
@@ -399,18 +542,27 @@ function tick(nowMs) {
     ? audioCtx.currentTime - audioT0
     : (nowMs - startMs) / 1000;
 
-  // Pose for the live dog this frame. Note: ripples freeze the pose they were
-  // emitted with (see r.pose below), so the trail does NOT flip retroactively.
+  // Pose + orientation for the live dog this frame. Ripples freeze pose +
+  // orientation at emission (see r.pose / r.sx / r.sy below), so the trail
+  // does NOT flip retroactively.
   const pose    = currentPose(t);
+  const poseTr  = poseTransform(t);
   const flipP   = flipProgress(t);
   // Paper-Mario flip: squash horizontally from 1 → 0 → 1 as flipP goes 0→1.
   // |cos(π·flipP)| gives that exact curve. The sprite hits scaleX=0 (edge-on,
   // invisible) at flipP=0.5, which is the same instant currentPose(t) crosses
   // its threshold — so the image swap lands inside the invisible frame.
   const flipScaleX = flipP !== null ? Math.abs(Math.cos(flipP * Math.PI)) : 1;
+  // Combine: base mascot facing (MASCOT_FACE_X) × per-flip horizontal toggle
+  // (poseTr.sx) × squash (flipScaleX). Y axis: just the per-flip upside-down
+  // toggle (poseTr.sy).
+  const drawSx = MASCOT_FACE_X * poseTr.sx * flipScaleX;
+  const drawSy = poseTr.sy;
   const dims    = poseDims[pose];
 
-  // bob + tilt — dog stays at center X, only oscillates vertically.
+  // bob + tilt — dog stays at center X, only oscillates vertically. Active
+  // through the intro hold too (the dog "swims in place"); only the SPRITE
+  // is fixed until the crash, motion lives the whole time.
   const phase = bobPhase(t);
   const dogX  = mascot.centerX - dims.w / 2;
   const dogY  = mascot.centerY - dims.h / 2 + Math.sin(phase) * mascot.bobAmp;
@@ -442,6 +594,11 @@ function tick(nowMs) {
     ripples.push({
       x: dogX, y: dogY, w: dims.w, h: dims.h, tilt,
       colorIdx, t0: t, drift, endScale, pose,
+      // Orientation frozen at emission (MASCOT_FACE_X baked in once for the
+      // live frame in tick(); for ripples we bake it in here so the trail
+      // mirrors the dog that emitted it).
+      sx: MASCOT_FACE_X * poseTr.sx,
+      sy: poseTr.sy,
     });
     // Drive the silhouette-locked glow (used by domain shadow, slam keyframe).
     document.documentElement.style.setProperty("--tick-color", PALETTE[colorIdx]);
@@ -480,7 +637,7 @@ function tick(nowMs) {
     const scale = 1 + (r.endScale - 1) * Math.pow(k, 0.7);
     const alpha = Math.pow(1 - k, 1.1) * 0.9;
     const dx    = r.drift * age;
-    drawRippleSilhouette(silhouettes[r.pose ?? 0][r.colorIdx], r.x + dx, r.y, r.w, r.h, r.tilt, scale, alpha);
+    drawRippleSilhouette(silhouettes[r.pose ?? 0][r.colorIdx], r.x + dx, r.y, r.w, r.h, r.tilt, scale, alpha, r.sx ?? 1, r.sy ?? 1);
   }
   ctx.globalAlpha = 1;
 
@@ -492,19 +649,20 @@ function tick(nowMs) {
   // dominant canvas cost on slower GPUs after the drop.
   // During a pose flip the sprite squashes horizontally (Paper Mario card
   // flip); the swap lands at flipScaleX=0 so the image change is hidden in
-  // the edge-on frame.
-  drawSilhouette(tintedDogs[pose][colorIdx], dogX, dogY, dims.w, dims.h, tilt, flipScaleX);
+  // the edge-on frame. drawSx folds in mascot facing + per-flip horizontal
+  // mirror + squash; drawSy carries the 1/1-segment upside-down toggle.
+  drawSilhouette(tintedDogs[pose][colorIdx], dogX, dogY, dims.w, dims.h, tilt, drawSx, drawSy);
 
-  paintFavicon(t, pose, tilt);
+  paintFavicon(t, pose, tilt, drawSx, drawSy);
 
   requestAnimationFrame(tick);
 }
 
 // Arcade attract frame: a single static blit of the mascot. No bob, no tilt,
-// no flip — the dog stands still under the blinking prompt. The pose mirrors
-// what currentPose(0) would pick for the live show's first frame (pose 1
-// "hype" for hover.dog, pose 0 otherwise), so click-to-play has zero visual
-// jump. Palette index 0 (magenta) matches colorIdx at t=0.
+// no squash — the dog stands still under the blinking prompt. Pose 0 +
+// palette 0 match the live show's t=0 state, so click-to-play has zero visual
+// jump. MASCOT_FACE_X still applies (the dog faces LEFT on hover.dog even
+// before the clock starts).
 function drawAttractFrame() {
   if (!mascotImg) return;
   ctx.fillStyle = "#080012";
@@ -513,14 +671,14 @@ function drawAttractFrame() {
   const dims = poseDims[pose];
   const dogX = mascot.centerX - dims.w / 2;
   const dogY = mascot.centerY - dims.h / 2;
-  drawSilhouette(tintedDogs[pose][0], dogX, dogY, dims.w, dims.h, 0, 1);
+  drawSilhouette(tintedDogs[pose][0], dogX, dogY, dims.w, dims.h, 0, MASCOT_FACE_X, 1);
 }
 
-function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha) {
+function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha, sx = 1, sy = 1) {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.translate(x + w / 2, y + h / 2);
-  ctx.scale(scale, scale);
+  ctx.scale(scale * sx, scale * sy);
   ctx.rotate(tilt);
   ctx.drawImage(img, -w / 2, -h / 2, w, h);
   ctx.restore();
@@ -567,4 +725,21 @@ function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha) {
   ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
     addEventListener(ev, beginPlay, { passive: true })
   );
+
+  // Dev-only headless affordance: `?autoplay=1` kicks the visual clock
+  // without a user gesture so chromium --headless / playwright smoke tests
+  // can capture mid-show frames. Gated to the same dev hosts as `?host=`
+  // in sites.js so prod URLs can't bypass the autoplay gate.
+  const DEV_AUTO_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", ""]);
+  const isDev = DEV_AUTO_HOSTS.has(location.hostname) ||
+                location.hostname.endsWith(".pages.dev") ||
+                location.hostname.endsWith(".github.io");
+  if (isDev && new URLSearchParams(location.search).get("autoplay") === "1") {
+    if (!visualsStarted) {
+      visualsStarted = true;
+      attractEl?.classList.add("hidden");
+      startMs = performance.now();
+      requestAnimationFrame(tick);
+    }
+  }
 })();
