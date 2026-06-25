@@ -833,6 +833,13 @@ function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha, sx = 1, sy = 
   };
 
   beginPlay();
+  // bfcache restore: visualsStarted / audioStarted are sticky after a back-nav
+  // restore, the AudioContext comes back suspended, and our listeners no-op
+  // because beginPlay() early-returns on visualsStarted. Untangling that in
+  // place would mean tracking + stopping every scheduled bufferSource and
+  // re-running boot — for a one-page landing, a hard reload is cheaper and
+  // strictly safer. The flicker is tiny; the alternative is silent audio.
+  addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
   ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
     addEventListener(ev, beginPlay, { passive: true })
   );

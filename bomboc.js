@@ -357,6 +357,9 @@ async function boot() {
   ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
     addEventListener(ev, begin, { passive: true, once: true })
   );
+  // bfcache restore: same reasoning as main.js — sticky flags + suspended
+  // AudioContext leave the gate broken. Hard reload is the simplest cure.
+  addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
 }
 
 boot();
