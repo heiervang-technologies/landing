@@ -37,7 +37,7 @@ let songDur = 174.80;
 //   2. Whisper word boundaries with high prob — same beats whisper actually
 //      latched onto, just with the wrong tokens.
 // First pass set — Markus can nudge any of these by ear. The pattern repeats
-// every SONG_DUR_S because the audio loops seamlessly.
+// every songDur (audio loops seamlessly).
 const BOMBOCLAT_DROPS = [
   23.4, 27.8, 30.0, 41.0, 76.2, 80.65, 87.25,
   119.3, 127.15, 137.9, 142.3, 153.3, 169.55,
@@ -143,6 +143,11 @@ window.addEventListener("resize", resize);
 //   ──────────────   ────────────   ────────────────────────────────────────
 //   "suspended"      false          ATTRACT  — boot done, awaiting gesture
 //   "running"        true           PLAYING  — buffer scheduled, audible
+//   "suspended"      true           BACKGROUND — browser/OS re-suspended the
+//                                   running context (tab hidden, OS sleep).
+//                                   Auto-resumes when foregrounded; bfcache
+//                                   restore is the only path that needs help
+//                                   (handled by the pageshow listener below).
 //   any              false (init)   PRE-BOOT — audioCtx not yet constructed
 //
 // startAudio() is called inside begin() and is idempotent (early-returns once
@@ -152,6 +157,11 @@ let audioCtx = null;
 let audioBuf = null;
 let audioT0  = null;          // audioCtx.currentTime mapped to visual t=0
 let audioStarted = false;
+
+// bfcache restore: see main.js for the full rationale. Registered at module
+// load (not inside async boot) so a pageshow event delivered mid-preload still
+// triggers the reload.
+addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
 
 async function preloadAudio() {
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -350,16 +360,15 @@ async function boot() {
     requestAnimationFrame(tick);
   }
 
-  // Same gesture-event set as main.js (pointer/keyboard/touch) so the gate
-  // unlocks consistently across input modalities. {once: true} is safe because
-  // begin() is idempotent — the second listener fired by event bubbling sees
-  // visualsStarted=true and early-returns.
+  // Same pointer/keyboard/touch event set as main.js so the gate unlocks
+  // consistently across input modalities. {once: true} (not used in main.js)
+  // is fine here because begin() sets visualsStarted synchronously before any
+  // await, so a second gesture of a different type that fires before begin()
+  // returns sees the flag and early-returns — the once self-detach just saves
+  // the second listener call.
   ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
     addEventListener(ev, begin, { passive: true, once: true })
   );
-  // bfcache restore: same reasoning as main.js — sticky flags + suspended
-  // AudioContext leave the gate broken. Hard reload is the simplest cure.
-  addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
 }
 
 boot();
