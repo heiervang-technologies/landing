@@ -135,7 +135,19 @@ function resize() {
 resize();
 window.addEventListener("resize", resize);
 
-// ─── Audio ────────────────────────────────────────────────────────────────
+// ─── Audio gate state machine ────────────────────────────────────────────
+// Mirrors main.js, simpler because bomboc has a single looping buffer (no
+// intro→loop handoff). States:
+//
+//   audioCtx.state   audioStarted   meaning
+//   ──────────────   ────────────   ────────────────────────────────────────
+//   "suspended"      false          ATTRACT  — boot done, awaiting gesture
+//   "running"        true           PLAYING  — buffer scheduled, audible
+//   any              false (init)   PRE-BOOT — audioCtx not yet constructed
+//
+// startAudio() is called inside begin() and is idempotent (early-returns once
+// audioStarted is set). audioCtx.resume() is called separately in begin() —
+// it must happen inside the user-gesture stack for browser autoplay policy.
 let audioCtx = null;
 let audioBuf = null;
 let audioT0  = null;          // audioCtx.currentTime mapped to visual t=0
@@ -338,8 +350,13 @@ async function boot() {
     requestAnimationFrame(tick);
   }
 
-  attractEl.addEventListener("click", begin, { once: true });
-  document.body.addEventListener("click", begin, { once: true });
+  // Same gesture-event set as main.js (pointer/keyboard/touch) so the gate
+  // unlocks consistently across input modalities. {once: true} is safe because
+  // begin() is idempotent — the second listener fired by event bubbling sees
+  // visualsStarted=true and early-returns.
+  ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
+    addEventListener(ev, begin, { passive: true, once: true })
+  );
 }
 
 boot();
