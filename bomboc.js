@@ -23,8 +23,12 @@ const FIRE_BASE_RATE   = 90;          // particles spawned per second, baseline
 const FIRE_BEAT_BURST  = 50;          // extra particles dropped on each beat
 const FIRE_PARTICLE_MAX = 600;        // hard cap to keep render time bounded
 
-// Song length in seconds. bombo.opus is the same 174.80 s as the source WAV.
-const SONG_DUR_S = 174.80;
+// Song length in seconds — fallback used until the audio buffer decodes; once
+// preloadAudio() finishes we switch to audioBuf.duration (174.8065 for the
+// current bombo.opus). Using the hardcoded value for wrap math drifts the
+// visual song-time off the audio by ~6.5 ms per wrap (≈ 0.65 s after 100 wraps),
+// which makes BOMBOCLAT drops fire visibly ahead of the vocal on long sessions.
+let songDur = 174.80;
 
 // Drop timestamps in seconds (relative to song start) where the vocal hits
 // "BOMBOCLAT". Whisper hallucinated the lyric (heard "gangster / fool /
@@ -142,6 +146,9 @@ async function preloadAudio() {
   const res = await fetch("/assets/audio/bombo.opus");
   const arr = await res.arrayBuffer();
   audioBuf = await audioCtx.decodeAudioData(arr);
+  // Snap the wrap reference to the actual decoded length so visual songT and
+  // the audio's loop position stay in sync forever.
+  songDur = audioBuf.duration;
 }
 
 function startAudio() {
@@ -286,7 +293,7 @@ function tick(now) {
 
   // BOMBOCLAT flash. Map visual t to song time via modulo (audio loops).
   // When songT wraps back to ~0, reset the drop cursor for the next loop.
-  const songT = t % SONG_DUR_S;
+  const songT = t % songDur;
   if (songT < prevSongT) dropCursor = 0;       // wrap → start of drop list
   while (dropCursor < BOMBOCLAT_DROPS.length && songT >= BOMBOCLAT_DROPS[dropCursor]) {
     lastShoutT = t;
