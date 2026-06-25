@@ -1,5 +1,9 @@
 # landing
 
+<p align="center">
+  <img src="assets/hei/favicon.gif" width="192" alt="hei mascot animating through the palette">
+</p>
+
 Static placeholder pages for Heiervang Technologies domains.
 
 One repo, one deploy, N domains. The browser reads `location.hostname` and looks

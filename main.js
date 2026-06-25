@@ -312,16 +312,39 @@ async function prepareAudio() {
 // samples like WAV, so the decoded PCM is sample-exact — loop boundaries
 // remain seamless. Verified bit-identical to the source WAV via decoded-PCM
 // MD5 at re-encode time.
+// ─── Audio gate state machine ────────────────────────────────────────────
+// States (cross-product of two flags):
+//
+//   audioCtx.state       audioStarted   meaning
+//   ──────────────       ────────────   ───────────────────────────────────
+//   "suspended"          false          ATTRACT  — boot done, awaiting gesture
+//   "running"            false          RESUMED  — transient, awaiting schedule
+//   "running"            true           PLAYING  — buffers scheduled, audible
+//   "suspended"          true           — impossible (audioStarted only set
+//                                         after a successful resume)
+//
+// Allowed transitions (all driven by startAudioAt):
+//   ATTRACT → ATTRACT   (resume() rejected: optimistic call, no gesture yet)
+//   ATTRACT → PLAYING   (resume() succeeded + this caller won the schedule race)
+//   PLAYING → PLAYING   (re-entrant — early-return, no-op)
+//
+// Race window: the `await audioCtx.resume()` yields, so two concurrent callers
+// (e.g. the optimistic boot + a real user gesture) can both reach the post-
+// resume block. The order is fixed:
+//   1. await resume       (suspends caller, may take 1+ tick)
+//   2. check audioStarted (atomic w/ the set below — JS is single-threaded
+//                          between awaits, so no other caller can interleave)
+//   3. set audioStarted = true
+//   4. schedule buffers
+// The first post-resume caller passes step 2 and claims the slot; the second
+// sees audioStarted=true at step 2 and returns false. Both callers see ok=true
+// for at most one of them, so beginPlay() only kicks rAF once.
 async function startAudioAt(visualT) {
   if (audioStarted || !audioCtx || !introBuf || !loopBuf) return false;
   // Browser autoplay policy: resume() is rejected (or no-op) without a user
   // gesture. Don't claim the schedule slot until AFTER the resume — otherwise
   // a still-pending optimistic resume() (no gesture, will fail) blocks the
   // real user-gesture caller from scheduling, leaving audio muted.
-  // Race-safety: JS is single-threaded between awaits, so the post-resume
-  // {check audioStarted → set true → schedule} block runs atomically, and a
-  // second concurrent caller that reaches its own post-resume check will see
-  // the flag set and return without double-scheduling.
   if (audioCtx.state === "suspended") {
     try { await audioCtx.resume(); } catch (_) { return false; }
   }
