@@ -64,7 +64,9 @@
       cfg.mode === "bomboc"  ? "/bomboc.js"  :
       cfg.mode === "clanker" ? "/clanker.js" :
       "/main.js";
-    import(entry);
+    // .catch surfaces parse/network failures in DevTools instead of a silently
+    // blank page — bisecting a dead dispatcher is much cheaper with a stack.
+    import(entry).catch((e) => console.error("dispatcher:", entry, e));
   </script>
 </body>
 </html>

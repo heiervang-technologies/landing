@@ -344,8 +344,10 @@ async function boot() {
   attractEl.textContent = "ENTER 1 CLICK(S) TO PLAY";
   try { await preloadAudio(); } catch (e) { /* fall through to silent visuals */ }
 
-  // Wait for image to decode so the first painted frame has it.
-  if (img.decode) { try { await img.decode(); } catch (e) {} }
+  // Wait for image to decode so the first painted frame has it. Surface
+  // failures (404, corrupt PNG) in DevTools — the page boots either way but
+  // would otherwise render fire with no center image and zero feedback.
+  if (img.decode) { try { await img.decode(); } catch (e) { console.warn("bomboclat decode:", e); } }
 
   function begin() {
     if (visualsStarted) return;
