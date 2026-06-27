@@ -371,6 +371,25 @@ async function boot() {
   ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
     addEventListener(ev, begin, { passive: true, once: true })
   );
+
+  // Dev-only headless affordance (mirrors main.js): `?autoplay=1` kicks the
+  // visual clock without a user gesture so Lighthouse / Playwright can capture
+  // the running show. Audio still needs a gesture per browser policy — this
+  // only bypasses the visuals gate. Gated to dev hosts so prod URLs can't
+  // bypass the attract.
+  const DEV_AUTO_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", ""]);
+  const isDev = DEV_AUTO_HOSTS.has(location.hostname) ||
+                location.hostname.endsWith(".pages.dev") ||
+                location.hostname.endsWith(".github.io");
+  if (isDev && new URLSearchParams(location.search).get("autoplay") === "1") {
+    if (!visualsStarted) {
+      visualsStarted = true;
+      attractEl.classList.add("hidden");
+      startMs = performance.now();
+      lastFrameT = startMs;
+      requestAnimationFrame(tick);
+    }
+  }
 }
 
 boot();
