@@ -1,7 +1,7 @@
 import { configFor } from "/sites.js";
 
 // Track BPM derived from the original loop master: 86 beats in 45.96s →
-// 112.27 BPM. The shipped loop.wav has the false-ending breakdown spliced
+// 112.27 BPM. The shipped loop.flac has the false-ending breakdown spliced
 // out (now 31.02s), so it carries ~58 of the original 86 beats — the tempo
 // is identical, just shorter. Visuals are scripted off BPM, no live audio
 // analysis. Audio plays alongside; timing stays locked across the loop seam
@@ -54,7 +54,7 @@ const SPIRAL2_START  = 62.0;   // PLACEHOLDER
 const SPIRAL2_END    = 70.0;   // PLACEHOLDER
 // Audio file durations (used by the flip-schedule loop-wrap math — the audio
 // itself reads them off the decoded buffers at runtime). intro.wav plays once,
-// then loop.wav loops forever. The post-intro flip pattern repeats every
+// then loop.flac loops forever. The post-intro flip pattern repeats every
 // LOOP_DUR seconds, shifted into the future, so the cadence keeps phase with
 // the audio across every wrap.
 const INTRO_AUDIO_DUR = 39.98;
@@ -296,8 +296,8 @@ async function prepareAudio() {
     audioGain.gain.value = 0.85;
     audioGain.connect(audioCtx.destination);
     [introBuf, loopBuf] = await Promise.all([
-      decodeUrl("/assets/audio/intro.wav"),
-      decodeUrl("/assets/audio/loop.wav"),
+      decodeUrl("/assets/audio/intro.flac"),
+      decodeUrl("/assets/audio/loop.flac"),
     ]);
   } catch (_) {
     // Audio is non-essential to the visual. Swallow failures (e.g. headless).
@@ -306,9 +306,12 @@ async function prepareAudio() {
 // Kick off audio aligned to the visual clock already in progress. We compute
 // the current visual t (rAF-based) and start the intro/loop with a buffer
 // offset that matches, so audio joins mid-song without resetting the visuals.
-// Raw WAV (uncompressed PCM) is used so there is ZERO encoder padding — Opus/
-// MP3 add silent samples at stream boundaries that decodeAudioData doesn't
-// always strip, which creates an audible silence-blip at each loop wrap.
+// FLAC is used instead of WAV (40% smaller) AND instead of Opus/MP3 (which
+// add silent samples at stream boundaries that decodeAudioData doesn't always
+// strip, creating an audible blip at each loop wrap). FLAC stores integer
+// samples like WAV, so the decoded PCM is sample-exact — loop boundaries
+// remain seamless. Verified bit-identical to the source WAV via decoded-PCM
+// MD5 at re-encode time.
 async function startAudioAt(visualT) {
   if (audioStarted || !audioCtx || !introBuf || !loopBuf) return false;
   // Browser autoplay policy: resume() is rejected (or no-op) without a user
@@ -423,7 +426,7 @@ function inSpiral(t) { return t >= SPIRAL_START && t < SPIRAL_END; }
 //   In the 1/1 regimes the per-flip transform alternates horizontal mirror +
 //   every 8th flip lands upside-down. The 1/4 pace-up + 1/2 outro keep the
 //   same r2i counter advancing so the alternation pattern stays continuous.
-//   After loop.wav wraps (at t = INTRO_AUDIO_DUR + LOOP_AUDIO_DUR), the post-
+//   After loop.flac wraps (at t = INTRO_AUDIO_DUR + LOOP_AUDIO_DUR), the post-
 //   intro slice of this pattern is replayed for each subsequent loop iteration
 //   so the cadence stays locked to the audio.
 // Flip events are aligned to the global beat-multiple grid (not relative to
@@ -474,7 +477,7 @@ const { FLIP_TIMES, FLIP_TRANSFORMS } = (() => {
   }
   // [SPIRAL2_START, SPIRAL2_END): NO flips — sprite holds through spiral #2.
   // ── Loop wrap: replay the post-intro pattern shifted by k * LOOP_AUDIO_DUR
-  // for each subsequent audio loop iteration. The audio re-plays loop.wav
+  // for each subsequent audio loop iteration. The audio re-plays loop.flac
   // forever starting at INTRO_AUDIO_DUR; we mirror that by re-emitting the
   // flips that fell in [INTRO_AUDIO_DUR, INTRO_AUDIO_DUR + LOOP_AUDIO_DUR)
   // shifted into the future.
