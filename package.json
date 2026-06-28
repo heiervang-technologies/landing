@@ -1,0 +1,12 @@
+{
+  "name": "landing",
+  "private": true,
+  "description": "Static placeholder pages for Heiervang Technologies domains. This package.json exists ONLY to declare dev tooling (@playwright/test for smoke tests). The shipped site has no build step; npm is not part of the deploy.",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
+}

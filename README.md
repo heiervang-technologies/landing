@@ -77,3 +77,18 @@ open http://localhost:8000
 ```
 
 Click anywhere to start audio (browsers block autoplay with sound).
+
+## Smoke tests
+
+```sh
+npm install                 # one-time; pulls @playwright/test
+npx playwright install      # one-time; pulls Chromium ~115 MB
+npm test                    # boots a throwaway http.server + runs tests
+npm run test:ui             # interactive UI mode for debugging a failing case
+```
+
+The tests cover the regressions that have shipped twice — page boots without
+console errors, the audio gate transitions on a real gesture, the
+`?autoplay=1` dev affordance still kicks the visual clock. They are **not**
+part of the deploy: `npm` is dev-only tooling; the published site is still
+the static HTML/CSS/JS in this repo.
