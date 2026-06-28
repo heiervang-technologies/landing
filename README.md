@@ -9,8 +9,8 @@ and pointing its DNS at this Cloudflare Pages project.
 ## Stack
 
 - Plain HTML / CSS / ES modules — no build step.
-- Audio via Web Audio API: a one-shot `intro.wav` flows into a seamless
-  `loop.wav`. The hei PNG drifts on a `<canvas>` with a beat-locked color
+- Audio via Web Audio API: a one-shot `intro.flac` flows into a seamless
+  `loop.flac`. The hei PNG drifts on a `<canvas>` with a beat-locked color
   trail; beats are derived from the loop's known tempo, so the slam lands on
   time without runtime FFT analysis.
 - Pixel-art slam typography (Press Start 2P) with glitch + chromatic
@@ -29,8 +29,8 @@ sites.js                   # hostname → { title, headline, domain, owner }
 _headers                   # CF Pages per-path cache policy
 CNAME                      # informational on CF Pages
 assets/
-  audio/intro.wav          # boot hit
-  audio/loop.wav           # seamless body loop
+  audio/intro.flac         # boot hit (FLAC: lossless, 40% smaller than WAV,
+  audio/loop.flac          # sample-exact loop boundaries — no Opus padding)
   fonts/press-start-2p-latin.woff2
   hei/hei_mask_original.png  # base mascot; runtime recolors via canvas
   hei/hei_hoverboard*.png    # hoverboard variants
