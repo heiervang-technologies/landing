@@ -1,0 +1,991 @@
+{
+  "note": "Per-word surgical timings (stable-ts chunked DTW), then stop-words (IT/A/THE/OF/MY/AND/etc.) merged into the previous content word \u2014 so 'GOON' + 'IT' displays as one cue 'GOON IT' at GOON's onset. Reduces hit density without losing beat lock.",
+  "songDur": 172.5,
+  "bpm": 76,
+  "lines": [
+    {
+      "t": 0.52,
+      "text": "GOON IT"
+    },
+    {
+      "t": 2.74,
+      "text": "FAP IT"
+    },
+    {
+      "t": 2.8,
+      "text": "GOON IT"
+    },
+    {
+      "t": 3.22,
+      "text": "FAP IT"
+    },
+    {
+      "t": 3.24,
+      "text": "GOON IT"
+    },
+    {
+      "t": 7.62,
+      "text": "FAP IT"
+    },
+    {
+      "t": 10.1,
+      "text": "GOON IT"
+    },
+    {
+      "t": 10.1,
+      "text": "FAP IT"
+    },
+    {
+      "t": 12.2,
+      "text": "GOON IT"
+    },
+    {
+      "t": 14.04,
+      "text": "FAP IT"
+    },
+    {
+      "t": 14.9,
+      "text": "SHA"
+    },
+    {
+      "t": 14.98,
+      "text": "GOT"
+    },
+    {
+      "t": 15.2,
+      "text": "GLEAM"
+    },
+    {
+      "t": 15.4,
+      "text": "LIKKA"
+    },
+    {
+      "t": 15.66,
+      "text": "VOSHEY"
+    },
+    {
+      "t": 16.54,
+      "text": "PROOMPT IT"
+    },
+    {
+      "t": 17.4,
+      "text": "RAP IT"
+    },
+    {
+      "t": 18.06,
+      "text": "SMOKING MY"
+    },
+    {
+      "t": 18.44,
+      "text": "GREENS WITH"
+    },
+    {
+      "t": 18.84,
+      "text": "O'SHAY"
+    },
+    {
+      "t": 19.74,
+      "text": "CLANKER"
+    },
+    {
+      "t": 20.24,
+      "text": "WRANGLER"
+    },
+    {
+      "t": 20.58,
+      "text": "SIPPIN"
+    },
+    {
+      "t": 20.86,
+      "text": "LEAN IN A"
+    },
+    {
+      "t": 21.64,
+      "text": "PURPLE"
+    },
+    {
+      "t": 21.9,
+      "text": "OCEAN"
+    },
+    {
+      "t": 23.16,
+      "text": "CHICKEN"
+    },
+    {
+      "t": 23.44,
+      "text": "STRANGLER"
+    },
+    {
+      "t": 23.92,
+      "text": "LEVEL"
+    },
+    {
+      "t": 23.92,
+      "text": "ONE"
+    },
+    {
+      "t": 24.28,
+      "text": "HUNDRED"
+    },
+    {
+      "t": 24.46,
+      "text": "SHINY"
+    },
+    {
+      "t": 24.72,
+      "text": "TYPHLOSION"
+    },
+    {
+      "t": 26.16,
+      "text": "GOON IT"
+    },
+    {
+      "t": 26.72,
+      "text": "FAP IT"
+    },
+    {
+      "t": 27.02,
+      "text": "PROOMPT IT"
+    },
+    {
+      "t": 27.48,
+      "text": "RAP IT"
+    },
+    {
+      "t": 27.84,
+      "text": "GRIP IT"
+    },
+    {
+      "t": 28.28,
+      "text": "GRAB IT"
+    },
+    {
+      "t": 28.56,
+      "text": "GROPE IT"
+    },
+    {
+      "t": 29.14,
+      "text": "RABBIT"
+    },
+    {
+      "t": 29.4,
+      "text": "SHIT IT"
+    },
+    {
+      "t": 29.86,
+      "text": "SHAT IT"
+    },
+    {
+      "t": 30.2,
+      "text": "LETTUCE AND"
+    },
+    {
+      "t": 30.5,
+      "text": "CABBAGE DON'T"
+    },
+    {
+      "t": 31.12,
+      "text": "KNOW DIDN'T"
+    },
+    {
+      "t": 31.7,
+      "text": "ASK"
+    },
+    {
+      "t": 31.9,
+      "text": "BITCH"
+    },
+    {
+      "t": 32.32,
+      "text": "GOON IT"
+    },
+    {
+      "t": 33.48,
+      "text": "FAP IT"
+    },
+    {
+      "t": 33.82,
+      "text": "SITTIN ON"
+    },
+    {
+      "t": 34.08,
+      "text": "TOP OF THE"
+    },
+    {
+      "t": 34.5,
+      "text": "HYPE"
+    },
+    {
+      "t": 34.74,
+      "text": "TRAIN"
+    },
+    {
+      "t": 35.72,
+      "text": "PROOMPT IT"
+    },
+    {
+      "t": 36.3,
+      "text": "RAP IT"
+    },
+    {
+      "t": 36.72,
+      "text": "HOUSE OF"
+    },
+    {
+      "t": 36.86,
+      "text": "CLANKERS MY"
+    },
+    {
+      "t": 37.54,
+      "text": "SECOND"
+    },
+    {
+      "t": 37.98,
+      "text": "BRAIN"
+    },
+    {
+      "t": 38.64,
+      "text": "CLANKER"
+    },
+    {
+      "t": 39.5,
+      "text": "WRANGLER"
+    },
+    {
+      "t": 39.96,
+      "text": "SUBWAY"
+    },
+    {
+      "t": 40.06,
+      "text": "SURFERS I"
+    },
+    {
+      "t": 40.58,
+      "text": "HOVER IN"
+    },
+    {
+      "t": 40.9,
+      "text": "THREE"
+    },
+    {
+      "t": 41.14,
+      "text": "LANES"
+    },
+    {
+      "t": 41.98,
+      "text": "CHICKEN"
+    },
+    {
+      "t": 42.34,
+      "text": "STRANGLER"
+    },
+    {
+      "t": 42.96,
+      "text": "REDSTONE"
+    },
+    {
+      "t": 43.1,
+      "text": "MINECRAFT"
+    },
+    {
+      "t": 43.42,
+      "text": "FARM"
+    },
+    {
+      "t": 43.72,
+      "text": "MAKING"
+    },
+    {
+      "t": 43.98,
+      "text": "SUGAR"
+    },
+    {
+      "t": 44.32,
+      "text": "CANES"
+    },
+    {
+      "t": 45.94,
+      "text": "SIX"
+    },
+    {
+      "t": 45.94,
+      "text": "SEVEN"
+    },
+    {
+      "t": 45.94,
+      "text": "HELL OR"
+    },
+    {
+      "t": 46.14,
+      "text": "HEAVEN"
+    },
+    {
+      "t": 46.88,
+      "text": "SEVEN"
+    },
+    {
+      "t": 46.88,
+      "text": "ELEVEN"
+    },
+    {
+      "t": 47.54,
+      "text": "GUY"
+    },
+    {
+      "t": 47.56,
+      "text": "NAMED"
+    },
+    {
+      "t": 47.76,
+      "text": "KEVIN"
+    },
+    {
+      "t": 51.08,
+      "text": "DREW THE"
+    },
+    {
+      "t": 51.08,
+      "text": "LINE IN"
+    },
+    {
+      "t": 51.08,
+      "text": "TIME"
+    },
+    {
+      "t": 51.08,
+      "text": "GET REAL DON'T"
+    },
+    {
+      "t": 51.08,
+      "text": "GO"
+    },
+    {
+      "t": 51.32,
+      "text": "WHINE"
+    },
+    {
+      "t": 52.6,
+      "text": "TOKEN"
+    },
+    {
+      "t": 52.86,
+      "text": "LAUNDER AND"
+    },
+    {
+      "t": 53.76,
+      "text": "GET ON THE"
+    },
+    {
+      "t": 54.62,
+      "text": "GRIND"
+    },
+    {
+      "t": 57.1,
+      "text": "CROP IT"
+    },
+    {
+      "t": 58.36,
+      "text": "CRAP IT"
+    },
+    {
+      "t": 58.74,
+      "text": "BUILD IT"
+    },
+    {
+      "t": 59.08,
+      "text": "SHIP IT"
+    },
+    {
+      "t": 59.38,
+      "text": "THAT"
+    },
+    {
+      "t": 59.4,
+      "text": "CLANKER"
+    },
+    {
+      "t": 59.74,
+      "text": "WHIP IT"
+    },
+    {
+      "t": 60.46,
+      "text": "OUCH"
+    },
+    {
+      "t": 60.74,
+      "text": "CLANKER"
+    },
+    {
+      "t": 61.06,
+      "text": "SPANKER"
+    },
+    {
+      "t": 61.5,
+      "text": "CLANKER"
+    },
+    {
+      "t": 62.0,
+      "text": "WRANGLER"
+    },
+    {
+      "t": 62.44,
+      "text": "COTTON"
+    },
+    {
+      "t": 62.82,
+      "text": "CLICKER"
+    },
+    {
+      "t": 63.08,
+      "text": "JSON"
+    },
+    {
+      "t": 63.6,
+      "text": "MANGLER"
+    },
+    {
+      "t": 64.02,
+      "text": "GOON IT"
+    },
+    {
+      "t": 64.38,
+      "text": "FAP IT"
+    },
+    {
+      "t": 64.74,
+      "text": "SHUT"
+    },
+    {
+      "t": 64.74,
+      "text": "UP"
+    },
+    {
+      "t": 64.94,
+      "text": "FAGGOT"
+    },
+    {
+      "t": 65.5,
+      "text": "POIROT"
+    },
+    {
+      "t": 66.02,
+      "text": "PARROT"
+    },
+    {
+      "t": 66.26,
+      "text": "ORANGE"
+    },
+    {
+      "t": 66.74,
+      "text": "CARROT"
+    },
+    {
+      "t": 67.2,
+      "text": "LOAD IT"
+    },
+    {
+      "t": 67.6,
+      "text": "LAG IT"
+    },
+    {
+      "t": 67.84,
+      "text": "SOAK IT"
+    },
+    {
+      "t": 68.34,
+      "text": "SAG IT"
+    },
+    {
+      "t": 69.42,
+      "text": "AURA"
+    },
+    {
+      "t": 70.88,
+      "text": "AURA"
+    },
+    {
+      "t": 71.26,
+      "text": "AURA"
+    },
+    {
+      "t": 72.02,
+      "text": "ORDER"
+    },
+    {
+      "t": 72.08,
+      "text": "ORDER"
+    },
+    {
+      "t": 72.26,
+      "text": "ORDER"
+    },
+    {
+      "t": 72.38,
+      "text": "LOCKED IN"
+    },
+    {
+      "t": 72.78,
+      "text": "LAID"
+    },
+    {
+      "t": 72.84,
+      "text": "BACK"
+    },
+    {
+      "t": 73.26,
+      "text": "NEVER"
+    },
+    {
+      "t": 73.32,
+      "text": "SOBER"
+    },
+    {
+      "t": 73.92,
+      "text": "EATING"
+    },
+    {
+      "t": 74.14,
+      "text": "YAKISOBA"
+    },
+    {
+      "t": 76.98,
+      "text": "COTTON"
+    },
+    {
+      "t": 76.98,
+      "text": "CLICKER"
+    },
+    {
+      "t": 77.58,
+      "text": "CLANKER"
+    },
+    {
+      "t": 77.82,
+      "text": "WHIPPER"
+    },
+    {
+      "t": 78.42,
+      "text": "IDLE"
+    },
+    {
+      "t": 78.5,
+      "text": "HERO"
+    },
+    {
+      "t": 79.36,
+      "text": "POTION"
+    },
+    {
+      "t": 79.36,
+      "text": "SIPPER"
+    },
+    {
+      "t": 80.16,
+      "text": "ROBOTS"
+    },
+    {
+      "t": 81.22,
+      "text": "CHOKING"
+    },
+    {
+      "t": 82.14,
+      "text": "BURNING"
+    },
+    {
+      "t": 82.14,
+      "text": "ALL MY"
+    },
+    {
+      "t": 82.64,
+      "text": "TOKENS"
+    },
+    {
+      "t": 83.64,
+      "text": "BROS"
+    },
+    {
+      "t": 83.66,
+      "text": "WEDGED HE"
+    },
+    {
+      "t": 84.26,
+      "text": "GOT"
+    },
+    {
+      "t": 84.54,
+      "text": "SHOOT BY A"
+    },
+    {
+      "t": 85.84,
+      "text": "FOOT"
+    },
+    {
+      "t": 86.08,
+      "text": "GUN"
+    },
+    {
+      "t": 86.8,
+      "text": "IMMA"
+    },
+    {
+      "t": 86.94,
+      "text": "STREAM"
+    },
+    {
+      "t": 87.12,
+      "text": "MYSELF"
+    },
+    {
+      "t": 87.84,
+      "text": "GET"
+    },
+    {
+      "t": 87.84,
+      "text": "MIND"
+    },
+    {
+      "t": 88.1,
+      "text": "BLOWN ON"
+    },
+    {
+      "t": 88.94,
+      "text": "PUMP"
+    },
+    {
+      "t": 89.3,
+      "text": "FUN"
+    },
+    {
+      "t": 90.44,
+      "text": "GOON IT"
+    },
+    {
+      "t": 90.88,
+      "text": "FAP IT"
+    },
+    {
+      "t": 91.3,
+      "text": "PROOMPT IT"
+    },
+    {
+      "t": 91.68,
+      "text": "RAP IT"
+    },
+    {
+      "t": 92.04,
+      "text": "GRIP IT"
+    },
+    {
+      "t": 92.5,
+      "text": "GRAB IT"
+    },
+    {
+      "t": 92.8,
+      "text": "GROPE IT"
+    },
+    {
+      "t": 93.3,
+      "text": "RABBIT"
+    },
+    {
+      "t": 93.6,
+      "text": "SHIT IT"
+    },
+    {
+      "t": 93.98,
+      "text": "SHAT IT"
+    },
+    {
+      "t": 94.4,
+      "text": "LETTUCE AND"
+    },
+    {
+      "t": 94.7,
+      "text": "CABBAGE DON'T"
+    },
+    {
+      "t": 95.28,
+      "text": "KNOW DIDN'T"
+    },
+    {
+      "t": 95.86,
+      "text": "ASK"
+    },
+    {
+      "t": 96.14,
+      "text": "BITCH"
+    },
+    {
+      "t": 96.42,
+      "text": "GOON IT"
+    },
+    {
+      "t": 97.3,
+      "text": "FAP IT"
+    },
+    {
+      "t": 97.6,
+      "text": "PROOMPT IT"
+    },
+    {
+      "t": 98.08,
+      "text": "RAP IT"
+    },
+    {
+      "t": 98.4,
+      "text": "CLANKER"
+    },
+    {
+      "t": 98.96,
+      "text": "WRANGLER"
+    },
+    {
+      "t": 99.14,
+      "text": "CHICKEN"
+    },
+    {
+      "t": 99.66,
+      "text": "STRANGLER"
+    },
+    {
+      "t": 101.38,
+      "text": "GOON IT"
+    },
+    {
+      "t": 101.38,
+      "text": "FAP IT"
+    },
+    {
+      "t": 101.66,
+      "text": "PROOMPT IT"
+    },
+    {
+      "t": 101.66,
+      "text": "RAP IT"
+    },
+    {
+      "t": 101.66,
+      "text": "CLANKER"
+    },
+    {
+      "t": 102.16,
+      "text": "WRANGLER"
+    },
+    {
+      "t": 102.36,
+      "text": "CHICKEN"
+    },
+    {
+      "t": 102.88,
+      "text": "STRANGLER"
+    },
+    {
+      "t": 105.6,
+      "text": "SHIT IT"
+    },
+    {
+      "t": 106.16,
+      "text": "SHAT IT"
+    },
+    {
+      "t": 106.62,
+      "text": "LETTUCE AND"
+    },
+    {
+      "t": 107.08,
+      "text": "CABBAGE"
+    },
+    {
+      "t": 108.3,
+      "text": "WEDGE IT"
+    },
+    {
+      "t": 108.3,
+      "text": "MAP IT"
+    },
+    {
+      "t": 112.0,
+      "text": "GOON IT"
+    },
+    {
+      "t": 116.56,
+      "text": "FAP IT"
+    },
+    {
+      "t": 116.96,
+      "text": "PROOMPT IT"
+    },
+    {
+      "t": 117.34,
+      "text": "RAP IT"
+    },
+    {
+      "t": 117.62,
+      "text": "GRIP IT"
+    },
+    {
+      "t": 118.2,
+      "text": "GRAB IT"
+    },
+    {
+      "t": 118.48,
+      "text": "GROPE IT"
+    },
+    {
+      "t": 119.08,
+      "text": "RABBIT"
+    },
+    {
+      "t": 119.2,
+      "text": "SHIT IT"
+    },
+    {
+      "t": 119.74,
+      "text": "SHAT IT"
+    },
+    {
+      "t": 120.02,
+      "text": "LETTUCE AND"
+    },
+    {
+      "t": 120.38,
+      "text": "CABBAGE DON'T"
+    },
+    {
+      "t": 120.96,
+      "text": "KNOW DIDN'T"
+    },
+    {
+      "t": 121.56,
+      "text": "ASK"
+    },
+    {
+      "t": 121.78,
+      "text": "BITCH"
+    },
+    {
+      "t": 122.4,
+      "text": "GOON"
+    },
+    {
+      "t": 122.42,
+      "text": "CROP IT IT"
+    },
+    {
+      "t": 122.8,
+      "text": "FAP IT"
+    },
+    {
+      "t": 123.76,
+      "text": "CRAP IT"
+    },
+    {
+      "t": 124.0,
+      "text": "BUILD IT"
+    },
+    {
+      "t": 124.56,
+      "text": "SHIP IT"
+    },
+    {
+      "t": 125.16,
+      "text": "THAT"
+    },
+    {
+      "t": 125.16,
+      "text": "CLANKER"
+    },
+    {
+      "t": 126.0,
+      "text": "WHIP IT"
+    },
+    {
+      "t": 126.72,
+      "text": "OUCH"
+    },
+    {
+      "t": 128.04,
+      "text": "CLANKER"
+    },
+    {
+      "t": 128.46,
+      "text": "SPANKER"
+    },
+    {
+      "t": 128.94,
+      "text": "CLANKER"
+    },
+    {
+      "t": 129.64,
+      "text": "WRANGLER"
+    },
+    {
+      "t": 129.7,
+      "text": "COTTON"
+    },
+    {
+      "t": 130.18,
+      "text": "CLICKER"
+    },
+    {
+      "t": 130.8,
+      "text": "JSON"
+    },
+    {
+      "t": 130.8,
+      "text": "MANGLER"
+    },
+    {
+      "t": 131.36,
+      "text": "GOON IT"
+    },
+    {
+      "t": 131.78,
+      "text": "FAP IT"
+    },
+    {
+      "t": 132.22,
+      "text": "SHUT"
+    },
+    {
+      "t": 132.22,
+      "text": "UP"
+    },
+    {
+      "t": 132.4,
+      "text": "FAGGOT"
+    },
+    {
+      "t": 133.02,
+      "text": "POIROT"
+    },
+    {
+      "t": 133.48,
+      "text": "PARROT"
+    },
+    {
+      "t": 133.72,
+      "text": "ORANGE"
+    },
+    {
+      "t": 134.28,
+      "text": "CARROT"
+    },
+    {
+      "t": 134.6,
+      "text": "LOAD IT"
+    },
+    {
+      "t": 135.04,
+      "text": "LAG IT"
+    },
+    {
+      "t": 135.42,
+      "text": "SOAK IT"
+    },
+    {
+      "t": 135.98,
+      "text": "SAG IT"
+    }
+  ]
+}

@@ -27,3 +27,6 @@
   Cache-Control: public, max-age=2592000, immutable
 /assets/*.webp
   Cache-Control: public, max-age=2592000, immutable
+# Lyric JSON is text that changes with edits — short cache so tweaks propagate.
+/assets/lyrics/*
+  Cache-Control: public, max-age=300, must-revalidate
