@@ -32,7 +32,10 @@
   <script type="module">
     import { configFor } from "/sites.js";
     const cfg = configFor(location.hostname);
-    const entry = cfg.mode === "bomboc" ? "/bomboc.js" : "/main.js";
+    const entry =
+      cfg.mode === "bomboc"  ? "/bomboc.js"  :
+      cfg.mode === "clanker" ? "/clanker.js" :
+      "/main.js";
     import(entry);
   </script>
 </body>

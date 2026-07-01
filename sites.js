@@ -41,6 +41,10 @@ export const SITES = {
   // Templated — same frontend, per-domain text.
   "clanker.cam":              T("clanker.cam"),
   "clanker.foundation":       T("clanker.foundation"),
+  // clanker.lifestyle: bespoke video-loop page — a Typhlosion-in-purple-ocean
+  // Sora-style lofi clip fills the viewport, unmuted on first click. Dispatcher
+  // routes mode:"clanker" to clanker.js (no mascot canvas, no beat clock).
+  "clanker.lifestyle":        { ...T("clanker.lifestyle"), mode: "clanker" },
   "clanker.productions":      T("clanker.productions"),
   "clanker.surf":             T("clanker.surf"),
   "clanker.wiki":             T("clanker.wiki"),

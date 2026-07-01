@@ -2,6 +2,10 @@
 # segment-based — name each top-level file explicitly.
 /main.js
   Cache-Control: public, max-age=300, must-revalidate
+/bomboc.js
+  Cache-Control: public, max-age=300, must-revalidate
+/clanker.js
+  Cache-Control: public, max-age=300, must-revalidate
 /sites.js
   Cache-Control: public, max-age=300, must-revalidate
 /style.css
@@ -15,4 +19,6 @@
 /assets/fonts/*
   Cache-Control: public, max-age=2592000, immutable
 /assets/hei/*
+  Cache-Control: public, max-age=2592000, immutable
+/assets/video/*
   Cache-Control: public, max-age=2592000, immutable
