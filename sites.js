@@ -19,13 +19,14 @@ const T = (host, headline) => ({
 // `mascots` on each pose-flip boundary. All entries here are native-RIGHT;
 // `flipMascots: true` on the site config mirrors them at render so the dog
 // faces LEFT on screen (matching the rightward-drifting ripple trail).
-// hover_hover3m is the pre-mirrored variant of hover3 (the only native-left
-// original in the set, flipped horizontally so it lines up with the rest).
+// hover_hover3m and hover_haiv3m are the pre-mirrored variants of hover3 and
+// haiv3 (the two native-left originals in the set), flipped horizontally so
+// they line up with the rest.
 const HOVER_DOG_MASCOTS = [
   // hover_hover4 is index 0 — it's the intro sprite shown for the full
   // single-sprite stretch before the 1/1 cycle kicks in.
   "hover_hover4", "hover_c854", "hover_c857", "hover_falling",
-  "hover_haiv3", "hover_heihover", "hover_hover2", "hover_hover3m",
+  "hover_haiv3m", "hover_heihover", "hover_hover2", "hover_hover3m",
   "hover_dog-kickflip",
 ].map((s) => `/assets/hei/${s}.png`);
 
