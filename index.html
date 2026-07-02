@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An interactive audio-reactive mascot page from Heiervang Technologies.">
   <title>hei</title>
   <!-- Per-host mascot preload. Most domains use the templated render
        (hei_mask_original.png); hover.dog/hoverboard.dog use their own sprite
@@ -47,13 +48,15 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <canvas id="stage"></canvas>
-  <section id="overlay">
-    <h1 id="headline" data-text=""></h1>
-    <div id="domain"></div>
-    <div id="owner"></div>
-  </section>
-  <div id="attract">ENTER 1 CLICK(S) TO PLAY</div>
+  <main>
+    <canvas id="stage"></canvas>
+    <section id="overlay">
+      <h1 id="headline" data-text=""></h1>
+      <div id="domain"></div>
+      <div id="owner"></div>
+    </section>
+    <div id="attract">ENTER 1 CLICK(S) TO PLAY</div>
+  </main>
   <!-- Dispatcher: most domains run the mascot renderer (main.js); bespoke
        per-domain renderers are picked here by cfg.mode. Keeping the resolution
        in one place means the static HTML stays single-file across all hosts. -->
