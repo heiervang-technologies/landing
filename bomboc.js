@@ -23,8 +23,12 @@ const FIRE_BASE_RATE   = 90;          // particles spawned per second, baseline
 const FIRE_BEAT_BURST  = 50;          // extra particles dropped on each beat
 const FIRE_PARTICLE_MAX = 600;        // hard cap to keep render time bounded
 
-// Song length in seconds. bombo.opus is the same 174.80 s as the source WAV.
-const SONG_DUR_S = 174.80;
+// Song length in seconds — fallback used until the audio buffer decodes; once
+// preloadAudio() finishes we switch to audioBuf.duration (174.8065 for the
+// current bombo.opus). Using the hardcoded value for wrap math drifts the
+// visual song-time off the audio by ~6.5 ms per wrap (≈ 0.65 s after 100 wraps),
+// which makes BOMBOCLAT drops fire visibly ahead of the vocal on long sessions.
+let songDur = 174.80;
 
 // Drop timestamps in seconds (relative to song start) where the vocal hits
 // "BOMBOCLAT". Whisper hallucinated the lyric (heard "gangster / fool /
@@ -33,7 +37,7 @@ const SONG_DUR_S = 174.80;
 //   2. Whisper word boundaries with high prob — same beats whisper actually
 //      latched onto, just with the wrong tokens.
 // First pass set — Markus can nudge any of these by ear. The pattern repeats
-// every SONG_DUR_S because the audio loops seamlessly.
+// every songDur (audio loops seamlessly).
 const BOMBOCLAT_DROPS = [
   23.4, 27.8, 30.0, 41.0, 76.2, 80.65, 87.25,
   119.3, 127.15, 137.9, 142.3, 153.3, 169.55,
@@ -131,17 +135,42 @@ function resize() {
 resize();
 window.addEventListener("resize", resize);
 
-// ─── Audio ────────────────────────────────────────────────────────────────
+// ─── Audio gate state machine ────────────────────────────────────────────
+// Mirrors main.js, simpler because bomboc has a single looping buffer (no
+// intro→loop handoff). States:
+//
+//   audioCtx.state   audioStarted   meaning
+//   ──────────────   ────────────   ────────────────────────────────────────
+//   "suspended"      false          ATTRACT  — boot done, awaiting gesture
+//   "running"        true           PLAYING  — buffer scheduled, audible
+//   "suspended"      true           BACKGROUND — browser/OS re-suspended the
+//                                   running context (tab hidden, OS sleep).
+//                                   Auto-resumes when foregrounded; bfcache
+//                                   restore is the only path that needs help
+//                                   (handled by the pageshow listener below).
+//   any              false (init)   PRE-BOOT — audioCtx not yet constructed
+//
+// startAudio() is called inside begin() and is idempotent (early-returns once
+// audioStarted is set). audioCtx.resume() is called separately in begin() —
+// it must happen inside the user-gesture stack for browser autoplay policy.
 let audioCtx = null;
 let audioBuf = null;
 let audioT0  = null;          // audioCtx.currentTime mapped to visual t=0
 let audioStarted = false;
+
+// bfcache restore: see main.js for the full rationale. Registered at module
+// load (not inside async boot) so a pageshow event delivered mid-preload still
+// triggers the reload.
+addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
 
 async function preloadAudio() {
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const res = await fetch("/assets/audio/bombo.opus");
   const arr = await res.arrayBuffer();
   audioBuf = await audioCtx.decodeAudioData(arr);
+  // Snap the wrap reference to the actual decoded length so visual songT and
+  // the audio's loop position stay in sync forever.
+  songDur = audioBuf.duration;
 }
 
 function startAudio() {
@@ -286,7 +315,7 @@ function tick(now) {
 
   // BOMBOCLAT flash. Map visual t to song time via modulo (audio loops).
   // When songT wraps back to ~0, reset the drop cursor for the next loop.
-  const songT = t % SONG_DUR_S;
+  const songT = t % songDur;
   if (songT < prevSongT) dropCursor = 0;       // wrap → start of drop list
   while (dropCursor < BOMBOCLAT_DROPS.length && songT >= BOMBOCLAT_DROPS[dropCursor]) {
     lastShoutT = t;
@@ -315,8 +344,10 @@ async function boot() {
   attractEl.textContent = "ENTER 1 CLICK(S) TO PLAY";
   try { await preloadAudio(); } catch (e) { /* fall through to silent visuals */ }
 
-  // Wait for image to decode so the first painted frame has it.
-  if (img.decode) { try { await img.decode(); } catch (e) {} }
+  // Wait for image to decode so the first painted frame has it. Surface
+  // failures (404, corrupt PNG) in DevTools — the page boots either way but
+  // would otherwise render fire with no center image and zero feedback.
+  if (img.decode) { try { await img.decode(); } catch (e) { console.warn("bomboclat decode:", e); } }
 
   function begin() {
     if (visualsStarted) return;
@@ -331,8 +362,34 @@ async function boot() {
     requestAnimationFrame(tick);
   }
 
-  attractEl.addEventListener("click", begin, { once: true });
-  document.body.addEventListener("click", begin, { once: true });
+  // Same pointer/keyboard/touch event set as main.js so the gate unlocks
+  // consistently across input modalities. {once: true} (not used in main.js)
+  // is fine here because begin() sets visualsStarted synchronously before any
+  // await, so a second gesture of a different type that fires before begin()
+  // returns sees the flag and early-returns — the once self-detach just saves
+  // the second listener call.
+  ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
+    addEventListener(ev, begin, { passive: true, once: true })
+  );
+
+  // Dev-only headless affordance (mirrors main.js): `?autoplay=1` kicks the
+  // visual clock without a user gesture so Lighthouse / Playwright can capture
+  // the running show. Audio still needs a gesture per browser policy — this
+  // only bypasses the visuals gate. Gated to dev hosts so prod URLs can't
+  // bypass the attract.
+  const DEV_AUTO_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", ""]);
+  const isDev = DEV_AUTO_HOSTS.has(location.hostname) ||
+                location.hostname.endsWith(".pages.dev") ||
+                location.hostname.endsWith(".github.io");
+  if (isDev && new URLSearchParams(location.search).get("autoplay") === "1") {
+    if (!visualsStarted) {
+      visualsStarted = true;
+      attractEl.classList.add("hidden");
+      startMs = performance.now();
+      lastFrameT = startMs;
+      requestAnimationFrame(tick);
+    }
+  }
 }
 
 boot();

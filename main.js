@@ -84,6 +84,15 @@ const attractEl = document.getElementById("attract");
 // from t=0 atomically, so they stay aligned across the session.
 let visualsStarted = false;
 
+// bfcache restore: visualsStarted / audioStarted are sticky after a back-nav
+// restore, the AudioContext comes back suspended, and our listeners no-op
+// because beginPlay() early-returns on visualsStarted. Untangling that in
+// place would mean tracking + stopping every scheduled bufferSource and
+// re-running boot — for a one-page landing, a hard reload is cheaper and
+// strictly safer. Registered at module load (not inside async boot) so a
+// pageshow event delivered mid-preload doesn't miss this listener.
+addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
+
 const cfg = configFor(location.hostname);
 if (cfg.title) document.title = cfg.title;
 if (cfg.headline) { elHead.textContent = cfg.headline; elHead.dataset.text = cfg.headline; }
@@ -312,16 +321,44 @@ async function prepareAudio() {
 // samples like WAV, so the decoded PCM is sample-exact — loop boundaries
 // remain seamless. Verified bit-identical to the source WAV via decoded-PCM
 // MD5 at re-encode time.
+// ─── Audio gate state machine ────────────────────────────────────────────
+// States (cross-product of two flags):
+//
+//   audioCtx.state       audioStarted   meaning
+//   ──────────────       ────────────   ───────────────────────────────────
+//   "suspended"          false          ATTRACT  — boot done, awaiting gesture
+//   "running"            false          RESUMED  — transient, awaiting schedule
+//   "running"            true           PLAYING  — buffers scheduled, audible
+//   "suspended"          true           BACKGROUND — browser/OS re-suspended
+//                                         a running context (tab hidden, OS
+//                                         sleep, mobile background). Auto-
+//                                         resumes when foregrounded; we don't
+//                                         intervene. bfcache restore is the
+//                                         outlier: handled by the pageshow
+//                                         reload listener (declared earlier).
+//
+// Allowed transitions (all driven by startAudioAt):
+//   ATTRACT → ATTRACT   (resume() rejected: optimistic call, no gesture yet)
+//   ATTRACT → PLAYING   (resume() succeeded + this caller won the schedule race)
+//   PLAYING → PLAYING   (re-entrant — early-return, no-op)
+//
+// Race window: the `await audioCtx.resume()` yields, so two concurrent callers
+// (e.g. the optimistic boot + a real user gesture) can both reach the post-
+// resume block. The order is fixed:
+//   1. await resume       (suspends caller, may take 1+ tick)
+//   2. check audioStarted (atomic w/ the set below — JS is single-threaded
+//                          between awaits, so no other caller can interleave)
+//   3. set audioStarted = true
+//   4. schedule buffers
+// The first post-resume caller passes step 2 and claims the slot; the second
+// sees audioStarted=true at step 2 and returns false. Both callers see ok=true
+// for at most one of them, so beginPlay() only kicks rAF once.
 async function startAudioAt(visualT) {
   if (audioStarted || !audioCtx || !introBuf || !loopBuf) return false;
   // Browser autoplay policy: resume() is rejected (or no-op) without a user
   // gesture. Don't claim the schedule slot until AFTER the resume — otherwise
   // a still-pending optimistic resume() (no gesture, will fail) blocks the
   // real user-gesture caller from scheduling, leaving audio muted.
-  // Race-safety: JS is single-threaded between awaits, so the post-resume
-  // {check audioStarted → set true → schedule} block runs atomically, and a
-  // second concurrent caller that reaches its own post-resume check will see
-  // the flag set and return without double-scheduling.
   if (audioCtx.state === "suspended") {
     try { await audioCtx.resume(); } catch (_) { return false; }
   }
@@ -499,6 +536,88 @@ const { FLIP_TIMES, FLIP_TRANSFORMS } = (() => {
   return { FLIP_TIMES: times, FLIP_TRANSFORMS: transforms };
 })();
 const IDENTITY_TR = { sx: 1, sy: 1 };
+
+// ─── Kick / snare bezier zips (pace-up + spiral only) ────────────────────
+// During the high-energy stretches the dog adds a quick cubic-bezier out-
+// and-back swing on every beat (= the kick/snare grid). Even-indexed beats
+// are kicks (subtle), odd-indexed are snares (bigger swing). Outside these
+// segments the offset is zero, so the dog rests at center.
+const HIT_DUR     = BEAT_S * 0.55;     // ~0.30 s zip — snaps back before next beat
+const HIT_AMP_X   = 0.16;              // peak X offset as fraction of innerWidth
+const HIT_AMP_Y   = 0.12;              // peak Y offset as fraction of innerHeight
+const HIT_SEGMENTS = [
+  [PACE_UP_START, PACE_UP_END],
+  [SPIRAL_START,  SPIRAL_END],
+];
+// Deterministic per-beat PRNG so the choreography is stable across reloads
+// (and identical between the audio loop's first iteration and its replays).
+function hitRng(seed) {
+  let s = (seed | 0) || 1;
+  return () => (s = (s * 9301 + 49297) % 233280) / 233280;
+}
+const { HIT_TIMES, HIT_TARGETS } = (() => {
+  const times = [], targets = [];
+  const rng = hitRng(0xb007d06);
+  const pushSeg = (s, e) => {
+    let idx = 0;
+    for (let b = Math.ceil(s / BEAT_S) * BEAT_S; b < e; b += BEAT_S, idx++) {
+      const isSnare = idx % 2 === 1;
+      const ang     = rng() * Math.PI * 2;
+      const amp     = isSnare ? 0.95 : 0.55;
+      const perpA   = ang + (rng() > 0.5 ? 1 : -1) * (Math.PI / 2);
+      const perpAmp = (0.35 + rng() * 0.30) * amp;
+      times.push(b);
+      // Cubic bezier control points: P0=P3=origin, P1=target, P2=target+perp.
+      // Storing target (x,y) + perpendicular bend (px,py) — see hitOffset().
+      targets.push({
+        x: Math.cos(ang) * amp,
+        y: Math.sin(ang) * amp,
+        px: Math.cos(perpA) * perpAmp,
+        py: Math.sin(perpA) * perpAmp,
+      });
+    }
+  };
+  for (const [s, e] of HIT_SEGMENTS) pushSeg(s, e);
+  // Loop-wrap: any hit past INTRO_AUDIO_DUR (i.e. inside loop.wav's region)
+  // replays at every loop iteration, just like FLIP_TIMES.
+  const baseT  = times.slice(), baseTg = targets.slice();
+  const loopI  = baseT.findIndex((t) => t >= INTRO_AUDIO_DUR);
+  if (loopI >= 0) {
+    for (let k = 1; k * LOOP_AUDIO_DUR < FLIP_HORIZON; k++) {
+      for (let i = loopI; i < baseT.length; i++) {
+        const t = baseT[i] + k * LOOP_AUDIO_DUR;
+        if (t >= FLIP_HORIZON) break;
+        times.push(t);
+        targets.push(baseTg[i]);
+      }
+    }
+  }
+  return { HIT_TIMES: times, HIT_TARGETS: targets };
+})();
+
+function hitOffset(t) {
+  // Find the most recent hit. If we're inside its HIT_DUR window, evaluate
+  // a cubic bezier out-and-back; otherwise the offset is (0, 0).
+  for (let i = HIT_TIMES.length - 1; i >= 0; i--) {
+    const ht = HIT_TIMES[i];
+    if (ht > t) continue;
+    const age = t - ht;
+    if (age > HIT_DUR) return { dx: 0, dy: 0 };
+    const p  = age / HIT_DUR;          // 0..1
+    const u  = 1 - p;
+    const tg = HIT_TARGETS[i];
+    // Cubic bezier with P0 = P3 = (0,0), P1 = (tg.x, tg.y),
+    // P2 = (tg.x + tg.px, tg.y + tg.py). Reduced:
+    //   B(p) = 3·u·p · [(tg.x + p·tg.px),  (tg.y + p·tg.py)]
+    const k = 3 * u * p;
+    return {
+      dx: k * (tg.x + p * tg.px) * innerWidth  * HIT_AMP_X,
+      dy: k * (tg.y + p * tg.py) * innerHeight * HIT_AMP_Y,
+    };
+  }
+  return { dx: 0, dy: 0 };
+}
+
 function flipIdx(t) {
   let i = 0;
   for (const ft of FLIP_TIMES) { if (t >= ft) i++; else break; }
@@ -566,9 +685,12 @@ function tick(nowMs) {
   // bob + tilt — dog stays at center X, only oscillates vertically. Active
   // through the intro hold too (the dog "swims in place"); only the SPRITE
   // is fixed until the crash, motion lives the whole time.
+  // hitOffset() adds a quick bezier swing on every kick/snare during pace-up
+  // and spiral (zero elsewhere) — see HIT_TIMES.
   const phase = bobPhase(t);
-  const dogX  = mascot.centerX - dims.w / 2;
-  const dogY  = mascot.centerY - dims.h / 2 + Math.sin(phase) * mascot.bobAmp;
+  const { dx: hitDx, dy: hitDy } = hitOffset(t);
+  const dogX  = mascot.centerX - dims.w / 2 + hitDx;
+  const dogY  = mascot.centerY - dims.h / 2 + Math.sin(phase) * mascot.bobAmp + hitDy;
   // Nose down when descending (cos > 0 → tilt < 0 ≈ CCW for a left-facing head).
   const tiltAmp = 0.30;
   const tilt    = -Math.cos(phase) * tiltAmp;

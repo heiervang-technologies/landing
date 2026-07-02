@@ -4,7 +4,35 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>hei</title>
-  <link rel="preload" as="image" href="/assets/hei/hei_mask_original.png">
+  <!-- Per-host mascot preload. Most domains use the templated render
+       (hei_mask_original.png); hover.dog/hoverboard.dog use their own sprite
+       pool; bomboc.lat uses bomboclat.png. The static preload used to be
+       hei_mask_original always — wasted ~30KB + a console warning on the
+       bespoke hosts (browser flagged it as preloaded-but-unused). Inline
+       script runs before the parser dispatches the <link> below, so the
+       fetch starts as early as a static preload would. -->
+  <script>
+    (function () {
+      var h = location.hostname.replace(/^www\./, "");
+      // Dev override (matches sites.js configFor): ?host=foo.bar reshapes the
+      // page on localhost / *.pages.dev / *.github.io so dev previews preload
+      // the right asset too. Skipped in prod so a malicious link can't shift
+      // which asset gets preloaded on a real domain.
+      var devHosts = { "localhost": 1, "127.0.0.1": 1, "0.0.0.0": 1, "": 1 };
+      var isDev = devHosts[h] || h.indexOf(".pages.dev", h.length - 10) >= 0
+                              || h.indexOf(".github.io", h.length - 10) >= 0;
+      if (isDev) {
+        var ov = new URLSearchParams(location.search).get("host");
+        if (ov) h = ov;
+      }
+      var href = "/assets/hei/hei_mask_original.png";
+      if (h === "bomboc.lat") href = "/assets/bomboclat.png";
+      else if (h === "hover.dog" || h === "hoverboard.dog") href = "/assets/hei/hover_hover4.png";
+      var l = document.createElement("link");
+      l.rel = "preload"; l.as = "image"; l.href = href;
+      document.head.appendChild(l);
+    })();
+  </script>
   <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/press-start-2p-latin.woff2" crossorigin>
   <!-- Audio is fetched on click via JS; `as=audio` is unsupported in most
        browsers (emits warnings, no actual preload), so we don't list it. -->
@@ -36,7 +64,9 @@
       cfg.mode === "bomboc"  ? "/bomboc.js"  :
       cfg.mode === "clanker" ? "/clanker.js" :
       "/main.js";
-    import(entry);
+    // .catch surfaces parse/network failures in DevTools instead of a silently
+    // blank page — bisecting a dead dispatcher is much cheaper with a stack.
+    import(entry).catch((e) => console.error("dispatcher:", entry, e));
   </script>
 </body>
 </html>

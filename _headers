@@ -22,3 +22,6 @@
   Cache-Control: public, max-age=2592000, immutable
 /assets/video/*
   Cache-Control: public, max-age=2592000, immutable
+# Per-domain hero images that live at /assets root (bomboc.lat etc.).
+/assets/*.png
+  Cache-Control: public, max-age=2592000, immutable
