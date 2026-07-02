@@ -6,7 +6,7 @@
   <title>hei</title>
   <!-- Per-host mascot preload. Most domains use the templated render
        (hei_mask_original.png); hover.dog/hoverboard.dog use their own sprite
-       pool; bomboc.lat uses bomboclat.png. The static preload used to be
+       pool; bomboc.lat uses bomboclat.webp. The static preload used to be
        hei_mask_original always — wasted ~30KB + a console warning on the
        bespoke hosts (browser flagged it as preloaded-but-unused). Inline
        script runs before the parser dispatches the <link> below, so the
@@ -26,7 +26,7 @@
         if (ov) h = ov;
       }
       var href = "/assets/hei/hei_mask_original.png";
-      if (h === "bomboc.lat") href = "/assets/bomboclat.png";
+      if (h === "bomboc.lat") href = "/assets/bomboclat.webp";
       else if (h === "hover.dog" || h === "hoverboard.dog") href = "/assets/hei/hover_hover4.png";
       var l = document.createElement("link");
       l.rel = "preload"; l.as = "image"; l.href = href;
