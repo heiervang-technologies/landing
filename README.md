@@ -19,27 +19,46 @@ and pointing its DNS at this Cloudflare Pages project.
   time without runtime FFT analysis.
 - Pixel-art slam typography (Press Start 2P) with glitch + chromatic
   aberration layered via `::before` / `::after` on the headline.
-- Hosted on Cloudflare Pages (`heiervang-landing`). Currently deployed via
-  `wrangler pages deploy` direct upload; git push is also wired but not the
-  active path.
+- `prefers-reduced-motion` respected two ways: CSS swaps the slam/beat-pulse/
+  glitch-jitter for a calm fade-in, and `main.js` skips the ~6.7s pre-drop
+  build-up entirely, starting audio + visuals already in the steady-state
+  loop.
+- Hosted on Cloudflare Pages (`heiervang-landing`). Deployed via `wrangler
+  pages deploy` direct upload — there is no GitHub-integrated build; merging
+  to `main` does NOT redeploy by itself, a manual `wrangler pages deploy`
+  from a checkout of `main` is required after each merge.
+- Most domains render the mascot canvas (`main.js`). A few bespoke domains
+  route to their own renderer instead, picked by `cfg.mode` in `sites.js`'s
+  per-host entry: `bomboc.lat` → `bomboc.js` (beat-reactive image + fire
+  particles, no mascot canvas), `clanker.lifestyle` → `clanker.js`
+  (fullscreen video loop, no mascot canvas). `index.html`'s inline
+  dispatcher script picks the entry module at load time.
 
 ## Layout
 
 ```
 index.html
 style.css
-main.js                    # render loop, audio playback, beat-locked color
-sites.js                   # hostname → { title, headline, domain, owner }
+robots.txt
+main.js                    # mascot-canvas render loop, audio, beat-locked color
+bomboc.js                  # bomboc.lat: beat-reactive image + fire particles
+clanker.js                 # clanker.lifestyle: fullscreen video loop
+sites.js                   # hostname → { title, headline, domain, owner, mode }
 _headers                   # CF Pages per-path cache policy
 CNAME                      # informational on CF Pages
 assets/
-  audio/intro.flac         # boot hit (FLAC: lossless, 40% smaller than WAV,
-  audio/loop.flac          # sample-exact loop boundaries — no Opus padding)
+  audio/intro.flac         # main.js boot hit (FLAC: lossless, sample-exact
+  audio/loop.flac          # loop boundaries — no Opus encoder padding)
+  audio/bombo.opus         # bomboc.lat loop track (loopStart=2 samples to
+                            # skip the source's own encoder-padding click)
+  video/clanker.mp4        # clanker.lifestyle background loop
+  video/clanker-poster.jpg
   fonts/press-start-2p-latin.woff2
   hei/hei_mask_original.png  # base mascot; runtime recolors via canvas
-  hei/hei_hoverboard*.png    # hoverboard variants
-  hei/favicon{.gif,.ico,-16,-32,-48,-64.png}
+  hei/hover_*.png            # hover.dog / hoverboard.dog 9-sprite pool
+  hei/favicon{.gif,.ico,-16,-32,-48}.png
   hei/apple-touch-icon.png
+  bomboclat.webp            # bomboc.lat hero image
 ```
 
 ## Adding a domain
@@ -57,7 +76,10 @@ For a bespoke headline:
 ```
 
 For full control (separate title / headline / domain sub-line), see the
-`retard.mx` reference entry in `sites.js`.
+`retard.mx` reference entry in `sites.js`. For a fully bespoke renderer
+(different page entirely, not just re-themed copy) see the `mode: "bomboc"` /
+`mode: "clanker"` entries and the `mascots` / `flipMascots` keys used by
+`hover.dog` — both documented inline in `sites.js`.
 
 Then attach the domain to the `heiervang-landing` Pages project (creates
 the CF zone if needed; flip Namecheap NS to Cloudflare; CF provisions TLS).
