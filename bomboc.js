@@ -3,7 +3,7 @@
 // Audio: bombo.wav, 110.41 BPM, 174.8 s, loops. The visual clock is derived
 // from BPM (not live audio analysis), same approach as main.js — audio plays
 // alongside, kept locked because bombo.wav loops cleanly at integer beats.
-// Image: bomboclat.png, 1254x1254 (square). Sized responsively to the smaller
+// Image: bomboclat.webp, 1254x1254 (square). Sized responsively to the smaller
 // viewport axis. Pulses on every beat (scale envelope) + crashes briefly on
 // every 4th beat (downbeat) with a stronger pulse.
 // Fire: GPU-cheap canvas particle system across the full viewport, denser
@@ -60,7 +60,9 @@ overlay.style.display = "none";
 // Inject the bomboclat image element (sits above the canvas).
 const img = document.createElement("img");
 img.id = "bombo";
-img.src = "/assets/bomboclat.png";
+// WebP q90: visually identical to the source PNG, 3.0MB -> 526KB (82%
+// smaller). No alpha channel in the source, so no transparency to lose.
+img.src = "/assets/bomboclat.webp";
 img.alt = "bomboclat";
 img.draggable = false;
 document.body.appendChild(img);
@@ -181,6 +183,14 @@ function startAudio() {
   const src = audioCtx.createBufferSource();
   src.buffer = audioBuf;
   src.loop = true;
+  // bombo.opus decodes with a genuine ~450/32768 sample jump between its
+  // last sample and its first (Opus encoder padding, same class of issue
+  // main.js's FLAC comment documents) — audible as a click on every loop
+  // wrap after the first ~175s. Skipping 2 samples on the loop restart
+  // (loopStart/loopEnd only apply on iterations after the first) lines up
+  // the waveform to within 16/32768, same trick as main.js's loop.flac.
+  src.loopStart = 2 / audioBuf.sampleRate;
+  src.loopEnd   = audioBuf.duration;
   src.connect(audioCtx.destination);
   src.start(startAt);
 }
