@@ -65,7 +65,11 @@
     const cfg = configFor(location.hostname);
     const entry =
       cfg.mode === "bomboc"  ? "/bomboc.js"  :
-      cfg.mode === "clanker" ? "/clanker.js" :
+      // ?v=1: clanker.js's edge cache (Cloudflare zone-level, outside our
+      // cache-purge API scope) served a stale pre-lyric build for hours
+      // after a deploy despite the 5-minute _headers TTL — this file is
+      // never cached, so a version bump here always busts it immediately.
+      cfg.mode === "clanker" ? "/clanker.js?v=1" :
       "/main.js";
     // .catch surfaces parse/network failures in DevTools instead of a silently
     // blank page — bisecting a dead dispatcher is much cheaper with a stack.
