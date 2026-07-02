@@ -96,6 +96,47 @@ test("no stacking under gesture burst: hover.dog rapid clicks schedule audio onc
   expect(await page.evaluate(() => window.__bufferSourceCount)).toBe(2);
 });
 
+// clanker.lifestyle (mode:"clanker" -> clanker.js) has no smoke coverage at
+// all — it's a bespoke renderer like hover.dog/bomboc.lat but was never
+// added to PAGES because it has no #stage canvas (stage.remove() drops it
+// in favor of a fullscreen <video>), so the shared boot-loop's canvas-dims
+// assertion doesn't apply. It also has no ?autoplay=1 dev affordance (unlike
+// main.js/bomboc.js), so the audio-gate test drives a real click instead.
+test("boot: clanker.lifestyle renders the background video without console errors", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(`console: ${m.text()}`);
+  });
+
+  await page.goto("/?host=clanker.lifestyle");
+  await expect(page).toHaveTitle("clanker.lifestyle");
+
+  const video = page.locator("#bg-video");
+  await expect(video).toHaveAttribute("src", /clanker\.mp4/);
+  await expect(video).toHaveJSProperty("loop", true);
+
+  await page.waitForTimeout(1500);
+  expect(errors, errors.join("\n")).toEqual([]);
+});
+
+test("audio gate: clanker.lifestyle click drops the headline overlay", async ({ page }) => {
+  await page.goto("/?host=clanker.lifestyle");
+  // clanker.js is a module script (deferred parse+exec) and, unlike the
+  // hover.dog stacking test above, this test only fires one click — wait for
+  // the module to have run (video element + click listeners attached)
+  // instead of racing it.
+  await page.waitForSelector("#bg-video");
+  await page.mouse.click(50, 50);
+  await expect.poll(
+    async () => page.evaluate(() => ({
+      attractHidden: document.getElementById("attract")?.classList.contains("hidden"),
+      overlayDropped: document.getElementById("overlay")?.classList.contains("dropped"),
+    })),
+    { timeout: 5_000 }
+  ).toMatchObject({ attractHidden: true, overlayDropped: true });
+});
+
 // prefers-reduced-motion: main.js should start the visual+audio clock
 // already past INTRO_END_S (the drop) instead of playing through the ~6.7s
 // pre-drop build-up. Checked via the same signals as the audio-gate test,
