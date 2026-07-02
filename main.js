@@ -819,6 +819,14 @@ function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha, sx = 1, sy = 
 // user gesture (or with enough Media Engagement Index on repeat visits). The
 // optimistic beginPlay() below covers the MEI case (returning visitors fly
 // past attract with no click); the gesture listeners cover everyone else.
+// Reduced motion: skip the pre-drop build-up (2x bob/drift speed, sprite held
+// on pose 0, quiet intro audio) and start already at the drop, in the
+// steady-state loop. CSS handles the slam/beat-pulse/jitter softening
+// separately (see style.css); this is the JS-side "start straight on the
+// loop" half of the same request.
+const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const BOOT_T = REDUCED_MOTION ? INTRO_END_S : 0;
+
 (async function boot() {
   await preload();
   setupFavicon();
@@ -835,14 +843,14 @@ function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha, sx = 1, sy = 
     // browser refused (no gesture yet) OR a concurrent caller scheduled first.
     // In either case, DON'T claim the visuals slot; leave attract showing so
     // the next real gesture can drive a fresh attempt.
-    const ok = await startAudioAt(0);
+    const ok = await startAudioAt(BOOT_T);
     if (!ok) return;
     // Re-check AFTER the await — multiple concurrent beginPlay() callers can
     // all reach this point; only one should claim the rAF kick.
     if (visualsStarted) return;
     visualsStarted = true;
     attractEl?.classList.add("hidden");
-    startMs = performance.now();
+    startMs = performance.now() - BOOT_T * 1000;
     requestAnimationFrame(tick);
   };
 
@@ -863,7 +871,7 @@ function drawRippleSilhouette(img, x, y, w, h, tilt, scale, alpha, sx = 1, sy = 
     if (!visualsStarted) {
       visualsStarted = true;
       attractEl?.classList.add("hidden");
-      startMs = performance.now();
+      startMs = performance.now() - BOOT_T * 1000;
       requestAnimationFrame(tick);
     }
   }
