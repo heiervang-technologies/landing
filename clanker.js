@@ -26,8 +26,8 @@ overlay.remove();
 
 const video = document.createElement("video");
 video.id = "bg-video";
-video.src = "/assets/video/clanker.mp4?v=4";
-video.poster = "/assets/video/clanker-poster.jpg?v=4";
+video.src = "/assets/video/clanker.mp4?v=5";
+video.poster = "/assets/video/clanker-poster.jpg?v=5";
 video.loop = true;
 video.muted = true;                // required for autoplay in modern browsers
 video.autoplay = true;
